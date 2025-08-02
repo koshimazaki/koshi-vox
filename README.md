@@ -14,7 +14,7 @@ Record voice, get instant transcription, and paste directly into your coding ses
 ## Features
 
 - **Instant Voice Recording**: Press SPACE or ENTER to stop
-- **Fast M1 Transcription**: Optimized for Apple Silicon
+- **Fast M1-4 Transcription**: Optimized for Apple Silicon
 - **Automatic Clipboard**: Text ready to paste with Cmd+V
 - **Customizable Alias**: Choose your preferred command name
 - **Premium UX**: Beautiful terminal interface with proper fonts
@@ -80,7 +80,7 @@ vox-debug
 4. Text appears and is copied to clipboard
 5. Paste into Claude Code with **Cmd+V**
 
-## 🔧 Configuration
+## Configuration
 
 ### Change Your Alias
 ```bash
@@ -100,18 +100,11 @@ npm install -g .
 vox-debug
 ```
 
-## 📋 System Requirements
+## System Requirements
 
-- **macOS**: Monterey+ recommended (M1 optimized)
+- **macOS**: Monterey+ recommended (M1-4 optimized)
 - **Linux**: Ubuntu 20.04+ or equivalent
 - **Microphone**: System microphone permissions required
-
-## 🚀 Premium Features
-
-- **Smart Font Switching**: Automatic terminal font optimization
-- **Contextual Error Messages**: Helpful troubleshooting guidance
-- **Robust Path Detection**: Works across different npm configurations
-- **Alias Management**: Automatic cleanup of old aliases
 
 ---
 
