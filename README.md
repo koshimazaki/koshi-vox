@@ -6,7 +6,7 @@
 ██║  ██╗╚██████╔╝███████║██║  ██║██║     ╚████╔╝ ╚██████╔╝██╔╝ ██╗
 ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝╚═╝      ╚═══╝   ╚═════╝ ╚═╝  ╚═╝
 ░░░█ Voice-To-Text Recorder for Terminal - optimized for MacOS █░░░
-░░ v1.1.8
+░░ v1.2.1
 ```
 Voice-To-Text Recorder for Terminal - optimized for MacOS and M series Macs for Claude Code workflow. 
 Record voice, get instant transcription, and paste directly into your coding sessions.
