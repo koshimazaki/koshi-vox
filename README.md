@@ -63,7 +63,7 @@ koshi-vox/
 ```
 ## Requirements
 
-- **Node.js** 18+ (for npm)
+- **Node.js** 20+ (for npm)
 - **Python 3** with packages:
   ```bash
   pip install faster-whisper soundfile

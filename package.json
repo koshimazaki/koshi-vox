@@ -33,6 +33,7 @@
   "author": "KoshiMazaki",
   "license": "MIT",
   "engines": {
+    "node": ">=20.0.0",
     "pnpm": ">=7.0.0"
   },
   "os": [
