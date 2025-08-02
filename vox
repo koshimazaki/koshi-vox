@@ -1,0 +1,348 @@
+#!/bin/bash
+# Quick Voice Recorder - Press SPACE or ENTER to stop
+# Optimized for M1 and instant workflow
+
+# Lime-based color scheme (following UX design principles)
+LIME='\033[38;5;154m'     # Bright lime green
+LIME_DIM='\033[38;5;148m' # Dimmer lime
+CYAN='\033[38;5;51m'      # Bright cyan
+ORANGE='\033[38;5;208m'   # Warning orange
+PINK='\033[38;5;198m'     # Bright pink
+RED='\033[38;5;196m'      # Bright red
+WHITE='\033[38;5;255m'    # Pure white
+GRAY='\033[38;5;240m'     # Subtle gray
+NC='\033[0m'              # No color
+
+# Terminal font switching (VS Code and cross-terminal compatible)
+# Only use font switching for supported terminals, otherwise use text styling
+set_title_font() {
+    if [[ "$TERM_PROGRAM" == "iTerm.app" ]]; then
+        echo -ne '\033]1337;SetFont=DepartureMono-Regular\007'
+    elif [[ "$TERM" == "xterm-kitty" ]]; then
+        echo -ne '\033]777;font;family;DepartureMono-Regular\033\\'
+    else
+        # For VS Code and other terminals, use bold styling
+        echo -ne '\033[1m'
+    fi
+}
+
+set_body_font() {
+    if [[ "$TERM_PROGRAM" == "iTerm.app" ]]; then
+        echo -ne '\033]1337;SetFont=3270-NerdFont\007'
+    elif [[ "$TERM" == "xterm-kitty" ]]; then
+        echo -ne '\033]777;font;family;3270-NerdFont\033\\'
+    else
+        # For VS Code and other terminals, use normal weight
+        echo -ne '\033[22m'
+    fi
+}
+
+reset_font() {
+    if [[ "$TERM_PROGRAM" == "iTerm.app" ]]; then
+        echo -ne '\033]1337;SetFont=\007'
+    elif [[ "$TERM" == "xterm-kitty" ]]; then
+        echo -ne '\033]777;font;family;\033\\'
+    else
+        # For VS Code and other terminals, reset formatting
+        echo -ne '\033[0m'
+    fi
+}
+
+# Cross-terminal compatible symbols (emoji fallbacks for VS Code)
+SYMBOL_MIC='🎤'        # Microphone emoji
+SYMBOL_RECORD='●'         # Black circle (record)
+SYMBOL_STOP='■'          # Black square (stop)
+SYMBOL_BRAIN='👾'       # Brain emoji
+SYMBOL_TEXT='📝'        # Memo emoji
+SYMBOL_CLIPBOARD='📋'   # Clipboard emoji
+SYMBOL_CHECK='✓'         # Check mark
+SYMBOL_CROSS='✗'         # Cross mark
+SYMBOL_WAVE='∿'          # Sine wave
+SYMBOL_GEAR='⚙️'         # Gear emoji
+SYMBOL_ROCKET='🚀'      # Rocket emoji
+SYMBOL_SPARKLES='✨'      # Sparkles emoji
+
+# Sound notification helper
+play_notification_sound() {
+    # Get the directory where this script is located
+    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local sound_file="${script_dir}/sounds/koshi-vox.mp3"
+    
+    # Cross-platform notification sound
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # Try bundled sound first, fallback to system sound
+        if [[ -f "$sound_file" ]]; then
+            afplay "$sound_file" 2>/dev/null &
+        else
+            # Use Blow.aiff instead of Glass.aiff for a softer notification
+            afplay /System/Library/Sounds/Blow.aiff 2>/dev/null &
+        fi
+    elif command -v paplay &> /dev/null; then
+        # Linux with PulseAudio
+        paplay /usr/share/sounds/alsa/Front_Left.wav 2>/dev/null &
+    elif command -v aplay &> /dev/null; then
+        # Linux with ALSA
+        aplay /usr/share/sounds/alsa/Front_Left.wav 2>/dev/null &
+    else
+        # Fallback: Terminal bell
+        echo -ne '\007'
+    fi
+}
+
+# Animation helpers
+animate_pulse() {
+    local symbol="$1"
+    local message="$2"
+    local duration="${3:-5}"
+    for i in $(seq 1 $duration); do
+        echo -ne "\r${LIME}${symbol} ${message}${NC}$(printf '%*s' $(($i % 4)) | tr ' ' '.')\033[K"
+        sleep 0.5
+    done
+    echo
+}
+
+# Audio level indicator using ▱ and ▰ blocks
+animate_recording_levels() {
+    local duration="${1:-10}"
+    local width=20  # Compact 20 blocks for better UX
+    local start_time=$(date +%s)
+    
+    # Give sox a moment to start showing its meter, then add our level bar below
+    sleep 0.5
+    echo  # Add newline to separate from sox output
+    echo -e "${LIME}🎤 Recording: 00:00 • ${WHITE}Press SPACE or ENTER to stop${NC}"
+    echo -ne "${GRAY}$(printf '▱%.0s' $(seq 1 $width))${NC}"
+    
+    for i in $(seq 1 $duration); do
+        # Calculate elapsed time
+        local current_time=$(date +%s)
+        local elapsed=$((current_time - start_time))
+        local minutes=$((elapsed / 60))
+        local seconds=$((elapsed % 60))
+        local time_display=$(printf "%02d:%02d" $minutes $seconds)
+        
+        # Simulate audio levels with some randomness (smoother changes)
+        local level=$((RANDOM % width + 3))  # 3 to width+3
+        if [ $level -gt $width ]; then level=$width; fi
+        
+        # Create level bar with ▰ (filled) and ▱ (empty)
+        local filled=$(printf '▰%.0s' $(seq 1 $level))
+        local empty=$(printf '▱%.0s' $(seq 1 $((width - level))))
+        
+        # Color coding: green for low, yellow for medium, red for high
+        local color="${LIME}"
+        if [ $level -gt 12 ]; then
+            color="${PINK}"
+        elif [ $level -gt 16 ]; then
+            color="${RED}"
+        fi
+        
+        # Update both the timer line and level bar
+        echo -ne "\033[1A\r${LIME}🎤 Recording: ${time_display} • ${WHITE}Press SPACE or ENTER to stop${NC}\033[1B"
+        echo -ne "\r${color}${filled}${GRAY}${empty}${NC}"
+        sleep 0.3  # Slightly slower update for less flicker
+    done
+    echo  # Move to next line when done
+}
+
+animate_transcribing() {
+    local duration="${1:-3}"
+    local symbols=("${SYMBOL_BRAIN}" "${SYMBOL_WAVE}" "${SYMBOL_TEXT}")
+    for i in $(seq 1 $duration); do
+        local idx=$(($i % 3))
+        echo -ne "\r${CYAN}${symbols[$idx]} Transcribing speech to text...\033[K"
+        sleep 0.4
+    done
+    echo
+}
+
+# Quick record with spacebar/enter stop
+quick_record() {
+    # Stylized header with proper font switching
+    set_title_font
+    echo -e "${LIME}╭──────────────────────────────────────╮${NC}"
+    echo -e "${LIME}│${NC} ${SYMBOL_MIC}${LIME}   VOX VOICE-TO-TEXT RECORDER   ${SYMBOL_MIC} ${LIME}│${NC}"
+    echo -e "${LIME}╰──────────────────────────────────────╯${NC}"
+    set_body_font
+    echo
+    
+    echo -e "${CYAN}${SYMBOL_RECORD} Starting recording...${NC}"
+    animate_pulse "░░██" "Press SPACE or ENTER when done speaking" 2
+    
+    TEMP_FILE="/tmp/quick_rec_$(date +%s).wav"
+    
+    # Start recording in background (suppress sox output to avoid interference)
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        if command -v sox &> /dev/null; then
+            sox -d -r 16000 -c 1 -b 16 -e signed-integer "$TEMP_FILE" trim 0 30 &> /dev/null &
+        else
+            ffmpeg -f avfoundation -i ":0" -ar 16000 -ac 1 -acodec pcm_s16le "$TEMP_FILE" -y &> /dev/null &
+        fi
+    else
+        arecord -f S16_LE -r 16000 -c 1 "$TEMP_FILE" &> /dev/null &
+    fi
+    
+    REC_PID=$!
+    
+    # Show animated recording levels while waiting for input
+    echo -e "${LIME}🎤 Recording in progress...${NC}"
+    echo
+    
+    # Start level animation in background
+    animate_recording_levels 300 &  # Long duration, will be killed when user presses key
+    LEVEL_PID=$!
+    
+    # Wait for spacebar or enter
+    read -n 1 -s key
+    
+    # Stop level animation
+    kill $LEVEL_PID 2>/dev/null
+    wait $LEVEL_PID 2>/dev/null
+    
+    # Stop recording
+    kill $REC_PID 2>/dev/null
+    wait $REC_PID 2>/dev/null
+    
+    # Quick validation
+    if [[ ! -f "$TEMP_FILE" ]] || [[ ! -s "$TEMP_FILE" ]]; then
+        echo -e "${RED}${SYMBOL_CROSS} Recording failed${NC}"
+        rm -f "$TEMP_FILE"
+        return 1
+    fi
+    
+    echo -e "${LIME}${SYMBOL_STOP} Recording stopped${NC}"
+    animate_transcribing 4
+    
+    # Direct Python transcription (fastest for quick workflow)
+    TEXT=$(python3 << EOF
+import sys
+import tempfile
+import time
+
+try:
+    from faster_whisper import WhisperModel
+    import soundfile as sf
+except ImportError:
+    print("ERROR: Missing dependencies")
+    sys.exit(1)
+
+try:
+    # Quick model load (cached after first use)
+    model = WhisperModel("tiny", device="cpu", compute_type="int8", cpu_threads=8)
+    
+    # Load and transcribe
+    audio, sr = sf.read("$TEMP_FILE", dtype='float32')
+    
+    # Ensure audio is float32 for ONNX compatibility
+    import numpy as np
+    if audio.dtype != np.float32:
+        audio = audio.astype(np.float32)
+    
+    # Ensure audio is in the right shape (1D array)
+    if len(audio.shape) > 1:
+        audio = audio.mean(axis=1)
+    
+    # Check if audio has actual content
+    max_amplitude = np.max(np.abs(audio))
+    if max_amplitude < 1e-6:
+        print("ERROR: Audio appears to be silence - check microphone permissions")
+        sys.exit(1)
+    
+    segments, info = model.transcribe(
+        audio, 
+        beam_size=1,
+        language="en",
+        condition_on_previous_text=False,
+        vad_filter=True,
+        vad_parameters=dict(min_silence_duration_ms=300)
+    )
+    
+    text = " ".join([s.text for s in segments]).strip()
+    print(text)
+    
+except Exception as e:
+    print(f"ERROR: {e}")
+    sys.exit(1)
+EOF
+)
+    
+    # Check if transcription worked
+    if [[ "$TEXT" == ERROR:* ]] || [[ -z "$TEXT" ]]; then
+        echo -e "${RED}${SYMBOL_CROSS} Transcription failed${NC}"
+        if [[ "$TEXT" == *"Missing dependencies"* ]]; then
+            echo -e "${ORANGE}${SYMBOL_GEAR} Install with: ${CYAN}pip install faster-whisper soundfile${NC}"
+        elif [[ "$TEXT" == *"silence"* ]] || [[ "$TEXT" == *"microphone"* ]]; then
+            echo -e "${ORANGE}${SYMBOL_MIC} Microphone permission issue:${NC}"
+            echo -e "${GRAY}   Go to System Settings → Privacy & Security → Microphone${NC}"
+            echo -e "${GRAY}   Enable microphone access for Terminal${NC}"
+        else
+            echo -e "${ORANGE}${SYMBOL_GEAR} Debug with: ${CYAN}vox-debug${NC}"
+        fi
+        rm -f "$TEMP_FILE"
+        return 1
+    fi
+    
+    # Play notification sound when transcription is complete
+    # play_notification_sound
+    
+    echo
+    echo -e "${LIME}${SYMBOL_TEXT} Transcribed text:${NC}"
+    echo -e "${WHITE}\"$TEXT\"${NC}"
+    
+    # Copy to clipboard with animation
+    echo
+    animate_pulse "${SYMBOL_CLIPBOARD}" "Copying to clipboard" 2
+    
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        echo -n "$TEXT" | pbcopy
+    else
+        echo -n "$TEXT" | xclip -selection clipboard
+    fi
+    
+    # Play notification sound when copying is complete
+    play_notification_sound
+    
+    echo -e "${LIME}${SYMBOL_CHECK} Successfully copied to clipboard!${NC}"
+    echo -e "${CYAN}░░█ Ready to paste with ${WHITE}Cmd+V${NC}"
+    
+    # Cleanup
+    rm -f "$TEMP_FILE"
+}
+
+# Check if dependencies exist
+check_quick_deps() {
+    if ! command -v python3 &> /dev/null; then
+        echo -e "${RED}${SYMBOL_CROSS} python3 not found${NC}"
+        return 1
+    fi
+    
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        if ! command -v sox &> /dev/null && ! command -v ffmpeg &> /dev/null; then
+            echo -e "${RED}${SYMBOL_CROSS} Install sox or ffmpeg: ${CYAN}brew install sox${NC}"
+            return 1
+        fi
+    else
+        if ! command -v arecord &> /dev/null; then
+            echo -e "${RED}${SYMBOL_CROSS} Install alsa-utils: ${CYAN}apt install alsa-utils${NC}"
+            return 1
+        fi
+        if ! command -v xclip &> /dev/null; then
+            echo -e "${RED}${SYMBOL_CROSS} Install xclip: ${CYAN}apt install xclip${NC}"
+            return 1
+        fi
+    fi
+    
+    return 0
+}
+
+# Main execution
+if check_quick_deps; then
+    quick_record
+    echo
+    echo -e "${LIME}░░███ Voice recording complete! ███░░${NC}"
+    reset_font
+else
+    echo -e "${PINK}${SYMBOL_GEAR} Setup required. Run: ${CYAN}pip install faster-whisper soundfile${NC}"
+    reset_font
+    exit 1
+fi

@@ -1,0 +1,134 @@
+#!/bin/bash
+# Install Python dependencies for Koshi-Code Vox
+
+# Lime-based color scheme (UX design principles)
+LIME='\033[38;5;154m'     # Bright lime green
+CYAN='\033[38;5;51m'      # Bright cyan
+ORANGE='\033[38;5;208m'   # Warning orange
+RED='\033[38;5;196m'      # Bright red
+WHITE='\033[38;5;255m'    # Pure white
+GRAY='\033[38;5;240m'     # Subtle gray
+NC='\033[0m'              # No color
+
+# Terminal font switching (iTerm2/Kitty support)
+FONTS_TITLE='\x1b]1337;SetFont=DepartureMono-Regular\x07'
+FONTS_BODY='\x1b]1337;SetFont=3270-NerdFont\x07'
+FONTS_RESET='\x1b]1337;SetFont=\x07'
+
+# Nerd Font symbols
+SYMBOL_PYTHON='󰌠'     # nf-md-language_python
+SYMBOL_PACKAGE='󰏖'    # nf-md-download
+SYMBOL_CHECK='󰄬'      # nf-md-check_circle
+SYMBOL_CROSS='󰅖'      # nf-md-close_circle
+SYMBOL_GEAR='󰒓'       # nf-md-cog
+SYMBOL_SPARKLES='󰝴'   # nf-md-sparkles
+SYMBOL_BRAIN='󰃪'      # nf-md-brain
+SYMBOL_MIC='󰍬'        # nf-md-microphone
+SYMBOL_API='󰒋'        # nf-md-api
+
+# Animation helper
+animate_install() {
+    local package="$1"
+    local duration="${2:-3}"
+    for i in $(seq 1 $duration); do
+        echo -ne "\r${LIME}${SYMBOL_PACKAGE} Installing ${package}$(printf '%*s' $i | tr ' ' '.')\033[K"
+        sleep 0.5
+    done
+    echo
+}
+
+echo -e "${FONTS_TITLE}"
+echo -e "${LIME}╭─────────────────────────────────────────────────╮${NC}"
+echo -e "${LIME}│${NC} ${SYMBOL_PYTHON}${LIME}   PYTHON DEPENDENCIES INSTALLER   ${SYMBOL_PYTHON} ${LIME}│${NC}"
+echo -e "${LIME}╰─────────────────────────────────────────────────╯${NC}"
+echo -e "${FONTS_BODY}"
+echo
+
+# Check Python availability
+if ! command -v python3 &> /dev/null; then
+    echo -e "${RED}${SYMBOL_CROSS} python3 not found${NC}"
+    echo -e "${ORANGE}${SYMBOL_GEAR} Install Python 3.8+ first${NC}"
+    echo -e "${FONTS_RESET}"
+    exit 1
+fi
+
+PYTHON_VERSION=$(python3 --version | cut -d' ' -f2)
+echo -e "${LIME}${SYMBOL_CHECK} Found Python ${WHITE}$PYTHON_VERSION${NC}"
+echo
+
+# Check pip
+if ! python3 -m pip --version &> /dev/null; then
+    echo -e "${RED}${SYMBOL_CROSS} pip not found${NC}"
+    echo -e "${ORANGE}${SYMBOL_GEAR} Install pip first${NC}"
+    echo -e "${FONTS_RESET}"
+    exit 1
+fi
+
+echo -e "${CYAN}${SYMBOL_GEAR} Installing M1-optimized packages...${NC}"
+echo
+
+# Core dependencies
+PACKAGES=(
+    "faster-whisper:${SYMBOL_BRAIN}:M1-optimized speech recognition"
+    "soundfile:${SYMBOL_MIC}:Audio file handling"
+    "librosa:${SYMBOL_MIC}:Advanced audio processing"
+    "fastapi:${SYMBOL_API}:Modern web API framework"
+    "uvicorn:${SYMBOL_API}:ASGI server for FastAPI"
+)
+
+FAILED_PACKAGES=()
+INSTALLED_PACKAGES=()
+
+for package_info in "${PACKAGES[@]}"; do
+    IFS=':' read -r package symbol description <<< "$package_info"
+    
+    echo -e "${CYAN}${symbol} ${description}${NC}"
+    animate_install "$package" 2
+    
+    if python3 -m pip install --user "$package" --quiet --disable-pip-version-check; then
+        echo -e "${LIME}${SYMBOL_CHECK} Successfully installed ${WHITE}$package${NC}"
+        INSTALLED_PACKAGES+=("$package")
+    else
+        echo -e "${RED}${SYMBOL_CROSS} Failed to install ${WHITE}$package${NC}"
+        FAILED_PACKAGES+=("$package")
+    fi
+    echo
+done
+
+# Summary
+echo -e "${FONTS_TITLE}"
+if [[ ${#FAILED_PACKAGES[@]} -eq 0 ]]; then
+    echo -e "${LIME}╭─────────────────────────────────────────────────╮${NC}"
+    echo -e "${LIME}│${NC} ${SYMBOL_SPARKLES}${LIME}    ALL DEPENDENCIES INSTALLED!    ${SYMBOL_SPARKLES} ${LIME}│${NC}"
+    echo -e "${LIME}╰─────────────────────────────────────────────────╯${NC}"
+else
+    echo -e "${ORANGE}╭─────────────────────────────────────────────────╮${NC}"
+    echo -e "${ORANGE}│${NC} ${SYMBOL_GEAR}${ORANGE}    PARTIAL INSTALLATION COMPLETE    ${SYMBOL_GEAR} ${ORANGE}│${NC}"
+    echo -e "${ORANGE}╰─────────────────────────────────────────────────╯${NC}"
+fi
+echo -e "${FONTS_BODY}"
+echo
+
+echo -e "${LIME}${SYMBOL_CHECK} Installed packages (${#INSTALLED_PACKAGES[@]}):${NC}"
+for package in "${INSTALLED_PACKAGES[@]}"; do
+    echo -e "  ${LIME}${SYMBOL_PACKAGE}${NC} ${WHITE}$package${NC}"
+done
+
+if [[ ${#FAILED_PACKAGES[@]} -gt 0 ]]; then
+    echo
+    echo -e "${ORANGE}${SYMBOL_CROSS} Failed packages (${#FAILED_PACKAGES[@]}):${NC}"
+    for package in "${FAILED_PACKAGES[@]}"; do
+        echo -e "  ${RED}${SYMBOL_CROSS}${NC} ${WHITE}$package${NC}"
+    done
+    echo
+    echo -e "${ORANGE}${SYMBOL_GEAR} Manual installation:${NC}"
+    echo -e "${CYAN}pip install --user ${FAILED_PACKAGES[*]}${NC}"
+fi
+
+echo
+echo -e "${CYAN}${SYMBOL_GEAR} Next steps:${NC}"
+echo -e "  ${LIME}1.${NC} Run: ${CYAN}setup-vox [alias-name]${NC}"
+echo -e "  ${LIME}2.${NC} Test with: ${CYAN}vox${NC} (or your chosen alias)"
+echo -e "  ${LIME}3.${NC} Debug if needed: ${CYAN}vox-debug${NC}"
+
+echo -e "${FONTS_RESET}"

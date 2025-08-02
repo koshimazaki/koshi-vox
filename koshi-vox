@@ -1,0 +1,84 @@
+#!/bin/bash
+# Koshi-Vox Main Entry Point
+# Always shows installer when running via npx
+
+# Get the actual directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# For npx, we need to find the actual package location
+if [[ "$SCRIPT_DIR" == *"/.bin"* ]]; then
+    # Running from .bin directory - find the actual package
+    PACKAGE_DIR="$(cd "$SCRIPT_DIR/../koshi-vox" && pwd)"
+else
+    PACKAGE_DIR="$SCRIPT_DIR"
+fi
+
+# Check if we're running via npx - always show installer for npx users
+if [[ "$npm_config_yes" == "true" ]] || [[ "$SCRIPT_DIR" == *"/_npx/"* ]] || [[ "$SCRIPT_DIR" == *"/.npm/"* ]]; then
+    # Running via npx - always show full installer experience
+    echo "🎤 Welcome to KOSHI-VOX!"
+    echo
+    node "$PACKAGE_DIR/install.js"
+    
+    # After installation, run the voice recorder
+    if [ $? -eq 0 ]; then
+        echo
+        echo "🚀 Setup complete! Starting voice recorder..."
+        echo
+        exec "$PACKAGE_DIR/vox"
+    else
+        echo "❌ Setup failed. Please run 'setup-vox' manually."
+        exit 1
+    fi
+else
+    # Not running via npx - check dependencies normally
+    # Show immediate feedback when script starts
+    echo "🎤 KOSHI-VOX Voice Recorder"
+    echo
+    
+    # Check if this is first run (no dependencies installed)
+    check_first_run() {
+        # Check for Python and dependencies
+        if ! command -v python3 &> /dev/null; then
+            return 0  # First run
+        fi
+        
+        # Check for Python packages - simplified check without model creation
+        if ! python3 -c "
+import sys
+try:
+    import faster_whisper
+    import soundfile
+    sys.exit(0)
+except ImportError:
+    sys.exit(1)
+" 2>/dev/null; then
+            return 0  # First run
+        fi
+        
+        return 1  # Not first run
+    }
+    
+    # Main logic
+    echo "Checking dependencies..."
+    if check_first_run; then
+        # First run - show installer
+        echo "🎤 Welcome to Koshi-Vox! Running first-time setup..."
+        echo
+        node "$PACKAGE_DIR/install.js"
+        
+        # After installation, run the voice recorder
+        if [ $? -eq 0 ]; then
+            echo
+            echo "🚀 Setup complete! Starting voice recorder..."
+            echo
+            exec "$PACKAGE_DIR/vox"
+        else
+            echo "❌ Setup failed. Please run 'setup-vox' manually."
+            exit 1
+        fi
+    else
+        # Dependencies exist - run voice recorder directly
+        exec "$PACKAGE_DIR/vox"
+    fi
+fi

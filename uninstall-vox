@@ -1,0 +1,107 @@
+#!/bin/bash
+# Uninstall Koshi-Code Vox Voice-to-Text
+
+# Lime-based color scheme (UX design principles)
+LIME='\033[38;5;154m'     # Bright lime green
+CYAN='\033[38;5;51m'      # Bright cyan
+ORANGE='\033[38;5;208m'   # Warning orange
+RED='\033[38;5;196m'      # Bright red
+WHITE='\033[38;5;255m'    # Pure white
+GRAY='\033[38;5;240m'     # Subtle gray
+NC='\033[0m'              # No color
+
+# Terminal font switching (iTerm2/Kitty support)
+FONTS_TITLE='\x1b]1337;SetFont=DepartureMono-Regular\x07'
+FONTS_BODY='\x1b]1337;SetFont=3270-NerdFont\x07'
+FONTS_RESET='\x1b]1337;SetFont=\x07'
+
+# Nerd Font symbols
+SYMBOL_CROSS='󰅖'     # nf-md-close_circle
+SYMBOL_CHECK='󰄬'     # nf-md-check_circle
+SYMBOL_GEAR='󰒓'      # nf-md-cog
+SYMBOL_TRASH='󰆴'     # nf-md-delete
+SYMBOL_WARNING='󰀪'   # nf-md-alert
+SYMBOL_SPARKLES='󰝴'  # nf-md-sparkles
+
+ZSHRC="$HOME/.zshrc"
+
+echo -e "${FONTS_TITLE}"
+echo -e "${RED}╭─────────────────────────────────────────────────╮${NC}"
+echo -e "${RED}│${NC} ${SYMBOL_TRASH}${RED}    KOSHI-CODE VOX UNINSTALLER    ${SYMBOL_TRASH} ${RED}│${NC}"
+echo -e "${RED}╰─────────────────────────────────────────────────╯${NC}"
+echo -e "${FONTS_BODY}"
+echo
+
+echo -e "${ORANGE}${SYMBOL_WARNING} This will remove:${NC}"
+echo -e "  ${GRAY}• npm package: ${WHITE}@koshi-code/vox-voice-to-text${NC}"
+echo -e "  ${GRAY}• Commands: ${WHITE}vox, vox-debug, setup-vox${NC}"
+echo -e "  ${GRAY}• All voice recording aliases from .zshrc${NC}"
+echo
+
+# Confirmation prompt
+echo -e "${LIME}${SYMBOL_GEAR} Continue with uninstall? ${GRAY}(y/N):${NC} \c"
+read -n 1 -r
+echo
+
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo -e "${LIME}${SYMBOL_CHECK} Uninstall cancelled${NC}"
+    echo -e "${FONTS_RESET}"
+    exit 0
+fi
+
+echo
+echo -e "${CYAN}${SYMBOL_GEAR} Uninstalling vox package...${NC}"
+
+# Remove npm package
+if npm list -g @koshi-code/vox-voice-to-text &>/dev/null; then
+    npm uninstall -g @koshi-code/vox-voice-to-text
+    echo -e "${LIME}${SYMBOL_CHECK} Removed npm package${NC}"
+else
+    echo -e "${GRAY}${SYMBOL_GEAR} npm package not found (already removed)${NC}"
+fi
+
+# Clean up aliases from .zshrc
+if [[ -f "$ZSHRC" ]]; then
+    echo -e "${CYAN}${SYMBOL_GEAR} Cleaning up aliases...${NC}"
+    
+    # Remove Koshi-Code Voice Recorder aliases
+    if grep -q "# 󰍬 Koshi-Code Voice Recorder" "$ZSHRC" || grep -q "# 🎤 Koshi-Code Voice Recorder" "$ZSHRC"; then
+        # Create backup
+        cp "$ZSHRC" "$ZSHRC.backup-$(date +%s)"
+        echo -e "${GRAY}${SYMBOL_CHECK} Created backup: .zshrc.backup-$(date +%s)${NC}"
+        
+        # Remove all Koshi-Code voice aliases (both old and new format)
+        grep -v -e "# 󰍬 Koshi-Code Voice Recorder" -e "# 🎤 Koshi-Code Voice Recorder" "$ZSHRC" | \
+        awk '
+        BEGIN { skip_next = 0 }
+        /^# (󰍬|🎤) Koshi-Code Voice Recorder$/ { skip_next = 1; next }
+        skip_next == 1 && /^alias .* = .*\/bin\/vox.*$/ { skip_next = 0; next }
+        { skip_next = 0; print }
+        ' > "$ZSHRC.tmp" && mv "$ZSHRC.tmp" "$ZSHRC"
+        
+        echo -e "${LIME}${SYMBOL_CHECK} Cleaned up voice recording aliases${NC}"
+    else
+        echo -e "${GRAY}${SYMBOL_GEAR} No Koshi-Code aliases found${NC}"
+    fi
+fi
+
+echo
+echo -e "${FONTS_TITLE}"
+echo -e "${LIME}╭─────────────────────────────────────────────────╮${NC}"
+echo -e "${LIME}│${NC} ${SYMBOL_SPARKLES}${LIME}    UNINSTALL COMPLETE!    ${SYMBOL_SPARKLES} ${LIME}│${NC}"
+echo -e "${LIME}╰─────────────────────────────────────────────────╯${NC}"
+echo -e "${FONTS_BODY}"
+echo
+
+echo -e "${CYAN}${SYMBOL_CHECK} What was removed:${NC}"
+echo -e "  ${LIME}${SYMBOL_TRASH}${NC} npm package and all binaries"
+echo -e "  ${LIME}${SYMBOL_TRASH}${NC} Voice recording aliases from .zshrc"
+echo
+
+echo -e "${ORANGE}${SYMBOL_GEAR} Next steps:${NC}"
+echo -e "  ${LIME}1.${NC} Reload shell: ${CYAN}source ~/.zshrc${NC}"
+echo -e "  ${LIME}2.${NC} Or start a new terminal session"
+echo
+
+echo -e "${GRAY}Thanks for trying Koshi-Code Vox! ${SYMBOL_SPARKLES}${NC}"
+echo -e "${FONTS_RESET}"

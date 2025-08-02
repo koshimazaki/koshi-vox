@@ -1,0 +1,357 @@
+#\!/bin/bash
+# Setup voice recording alias (default: 'vox')
+
+# Lime-based color scheme (UX design principles)
+LIME='\033[38;5;154m'     # Bright lime green
+LIME_DIM='\033[38;5;148m' # Dimmer lime
+CYAN='\033[38;5;51m'      # Bright cyan
+ORANGE='\033[38;5;208m'   # Warning orange
+RED='\033[38;5;196m'      # Bright red
+WHITE='\033[38;5;255m'    # Pure white
+GRAY='\033[38;5;240m'     # Subtle gray
+NC='\033[0m'              # No color
+
+# Cross-terminal compatible symbols with emoji fallbacks
+SYMBOL_MIC='🎤'        # Microphone emoji
+SYMBOL_GEAR='⚙️'         # Gear emoji
+SYMBOL_CHECK='✓'         # Check mark
+SYMBOL_CROSS='✗'         # Cross mark
+SYMBOL_MAGIC='🪄'       # Magic wand emoji
+SYMBOL_SPARKLES='✨'      # Sparkles emoji
+SYMBOL_VOICE='🗣️'        # Speaking head emoji
+SYMBOL_WAVE='∿'          # Sine wave
+SYMBOL_INSTALL='📦'     # Package emoji
+SYMBOL_TERMINAL='💻'    # Computer emoji
+SYMBOL_ROCKET='🚀'      # Rocket emoji
+
+# Utility function to check if running interactively
+is_interactive() {
+    [[ -t 0 && -t 1 ]]
+}
+
+# Display function - only outputs to terminal, never to files
+display() {
+    if is_interactive; then
+        echo -e "$@" >&2  # Force to stderr to avoid accidental redirection
+    fi
+}
+
+# Interactive alias setup
+setup_alias_name() {
+    local default_alias="vox"
+    local suggested_alias="${1:-$default_alias}"
+    
+    # If running non-interactively or alias provided as argument, use it
+    if ! is_interactive || [[ -n "$1" ]]; then
+        echo "$suggested_alias"
+        return 0
+    fi
+    
+    display "${CYAN}${SYMBOL_GEAR} Choose your voice recorder alias:${NC}"
+    display "${GRAY}  This will be the command you type to start recording${NC}"
+    display ""
+    display "${LIME}${SYMBOL_MIC} Suggested options:${NC}"
+    display "  ${WHITE}vox${NC}     - Default voice recorder"
+    display "  ${WHITE}voice${NC}   - Simple and clear"
+    display "  ${WHITE}rec${NC}     - Short and quick"
+    display "  ${WHITE}speak${NC}   - Descriptive"
+    display ""
+    display -n "${CYAN}Enter alias name [${WHITE}$default_alias${CYAN}]: ${NC}"
+    
+    read -r user_input
+    
+    # Use default if empty, otherwise use user input
+    if [[ -z "$user_input" ]]; then
+        echo "$default_alias"
+    else
+        # Validate alias name (alphanumeric and dash/underscore only)
+        if [[ "$user_input" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+            echo "$user_input"
+        else
+            display "${ORANGE}${SYMBOL_CROSS} Invalid alias name. Using default: ${WHITE}$default_alias${NC}"
+            echo "$default_alias"
+        fi
+    fi
+}
+
+# Get alias name interactively or from argument
+ALIAS_NAME=$(setup_alias_name "$1")
+
+# Confirmation step for interactive mode
+confirm_alias() {
+    local alias_name="$1"
+    
+    # Skip confirmation if non-interactive or argument provided
+    if ! is_interactive || [[ -n "$1" ]]; then
+        return 0
+    fi
+    
+    display ""
+    display "${LIME}${SYMBOL_CHECK} Selected alias: ${WHITE}$alias_name${NC}"
+    display -n "${CYAN}Confirm? [${WHITE}Y/n${CYAN}]: ${NC}"
+    
+    read -n 1 -r reply
+    display ""  # Add newline after single character read
+    
+    if [[ $reply =~ ^[Nn]$ ]]; then
+        display "${ORANGE}${SYMBOL_CROSS} Setup cancelled${NC}"
+        exit 0
+    fi
+    
+    return 0
+}
+
+# Confirm the alias choice
+confirm_alias "$ALIAS_NAME"
+
+# Find vox script - robust path detection for npm global installs
+find_vox_script() {
+    # Method 1: Check current directory first (local development)
+    if [[ -f "./vox" && -x "./vox" ]]; then
+        echo "$(pwd)/vox"
+        return 0
+    fi
+    
+    # Method 2: Check npm global bin directory (most reliable)
+    local npm_prefix=$(npm config get prefix 2>/dev/null)
+    if [[ -n "$npm_prefix" && -f "$npm_prefix/bin/vox" ]]; then
+        echo "$npm_prefix/bin/vox"
+        return 0
+    fi
+    
+    # Method 3: Try to resolve command (excluding aliases)
+    local cmd_result=$(command -v vox 2>/dev/null)
+    if [[ -n "$cmd_result" && -f "$cmd_result" && -x "$cmd_result" ]]; then
+        echo "$cmd_result"
+        return 0
+    fi
+    
+    # Method 4: Check if we can use npx to resolve dynamically
+    if command -v npx &> /dev/null && npx --quiet which koshi-vox &> /dev/null; then
+        echo "npx koshi-vox"
+        return 0
+    fi
+    
+    # Method 5: Common global npm paths
+    local paths=("/usr/local/bin/vox" "$HOME/.npm-global/bin/vox" "/opt/homebrew/bin/vox")
+    for path in "${paths[@]}"; do
+        if [[ -f "$path" && -x "$path" ]]; then
+            echo "$path"
+            return 0
+        fi
+    done
+    
+    return 1
+}
+
+VOX_SCRIPT=$(find_vox_script)
+ZSHRC="$HOME/.zshrc"
+
+# Terminal font switching (multiple terminal support)
+# iTerm2 format
+FONTS_TITLE_ITERM='\033]1337;SetFont=DepartureMono-Regular\007'
+FONTS_BODY_ITERM='\033]1337;SetFont=3270-NerdFont\007'
+FONTS_RESET_ITERM='\033]1337;SetFont=\007'
+
+# Kitty format  
+FONTS_TITLE_KITTY='\033]777;font;family;DepartureMono-Regular\033\\'
+FONTS_BODY_KITTY='\033]777;font;family;3270-NerdFont\033\\'
+FONTS_RESET_KITTY='\033]777;font;family;\033\\'
+
+# Function to set fonts based on terminal
+set_title_font() {
+    if ! is_interactive; then return; fi
+    if [[ "$TERM_PROGRAM" == "iTerm.app" ]]; then
+        echo -ne "$FONTS_TITLE_ITERM" >&2
+    elif [[ "$TERM" == "xterm-kitty" ]]; then
+        echo -ne "$FONTS_TITLE_KITTY" >&2
+    fi
+}
+
+set_body_font() {
+    if ! is_interactive; then return; fi
+    if [[ "$TERM_PROGRAM" == "iTerm.app" ]]; then
+        echo -ne "$FONTS_BODY_ITERM" >&2
+    elif [[ "$TERM" == "xterm-kitty" ]]; then
+        echo -ne "$FONTS_BODY_KITTY" >&2
+    fi
+}
+
+reset_font() {
+    if ! is_interactive; then return; fi
+    if [[ "$TERM_PROGRAM" == "iTerm.app" ]]; then
+        echo -ne "$FONTS_RESET_ITERM" >&2
+    elif [[ "$TERM" == "xterm-kitty" ]]; then
+        echo -ne "$FONTS_RESET_KITTY" >&2
+    fi
+}
+
+# Animation helper
+animate_dots() {
+    if ! is_interactive; then return; fi
+    local message="$1"
+    local duration="${2:-3}"
+    for i in $(seq 1 $duration); do
+        echo -ne "\r${LIME}${message}$(printf '%*s' $i | tr ' ' '.')\033[K" >&2
+        sleep 0.3
+    done
+    echo >&2
+}
+
+# Enhanced symbols with nerd font fallbacks
+get_symbol() {
+    local symbol_type="$1"
+    # Test if nerd fonts are available
+    if command -v fc-list >/dev/null 2>&1 && fc-list | grep -qi "nerd\|powerline" 2>/dev/null; then
+        # Nerd fonts likely available, use FontAwesome variants
+        case "$symbol_type" in
+            "mic") echo "" ;;          # nf-fa-microphone
+            "gear") echo "" ;;        # nf-fa-cog
+            "check") echo "" ;;       # nf-fa-check
+            "cross") echo "" ;;       # nf-fa-times
+            "magic") echo "" ;;       # nf-fa-magic
+            "sparkles") echo "" ;;    # nf-fa-star
+            "voice") echo "" ;;       # nf-fa-microphone
+            "wave") echo "" ;;        # nf-fa-music
+            "install") echo "" ;;     # nf-fa-download
+            "terminal") echo "" ;;    # nf-fa-terminal
+            "rocket") echo "" ;;      # nf-fa-rocket
+            *) echo "•" ;;              # bullet point fallback
+        esac
+    else
+        # Fallback to emoji/unicode
+        case "$symbol_type" in
+            "mic") echo "$SYMBOL_MIC" ;;
+            "gear") echo "$SYMBOL_GEAR" ;;
+            "check") echo "$SYMBOL_CHECK" ;;
+            "cross") echo "$SYMBOL_CROSS" ;;
+            "magic") echo "$SYMBOL_MAGIC" ;;
+            "sparkles") echo "$SYMBOL_SPARKLES" ;;
+            "voice") echo "$SYMBOL_VOICE" ;;
+            "wave") echo "$SYMBOL_WAVE" ;;
+            "install") echo "$SYMBOL_INSTALL" ;;
+            "terminal") echo "$SYMBOL_TERMINAL" ;;
+            "rocket") echo "$SYMBOL_ROCKET" ;;
+            *) echo "•" ;;
+        esac
+    fi
+}
+
+# Check if script exists
+if [[ -z "$VOX_SCRIPT" || ! -f "$VOX_SCRIPT" ]]; then
+    display "${RED}${SYMBOL_CROSS} vox script not found${NC}"
+    display "${ORANGE}${SYMBOL_GEAR} Diagnostic information:${NC}"
+    display "  ${GRAY}• npm prefix: ${WHITE}$(npm config get prefix 2>/dev/null || echo 'not found')${NC}"
+    display "  ${GRAY}• command -v vox: ${WHITE}$(command -v vox 2>/dev/null || echo 'not found')${NC}"
+    display "  ${GRAY}• Expected path: ${WHITE}$(npm config get prefix 2>/dev/null)/bin/vox${NC}"
+    display "${ORANGE}${SYMBOL_GEAR} Troubleshooting:${NC}"
+    display "  ${LIME}1.${NC} Run: ${CYAN}npm install -g .${NC} from the koshi-vox directory"
+    display "  ${LIME}2.${NC} Check: ${CYAN}npm list -g koshi-vox${NC}"
+    display "  ${LIME}3.${NC} Try: ${CYAN}npm uninstall -g koshi-vox && npm install -g .${NC}"
+    display "  ${LIME}4.${NC} Or use: ${CYAN}npx koshi-vox${NC} directly"
+    exit 1
+fi
+
+# Animated title with lime theme and proper font switching
+set_title_font
+display "${LIME}╭─────────────────────────────────────────────────╮${NC}"
+display "${LIME}│${NC} $(get_symbol "voice")${LIME}  KOSHI-CODE VOX VOICE-TO-TEXT SETUP  $(get_symbol "voice") ${LIME}│${NC}"
+display "${LIME}╰─────────────────────────────────────────────────╯${NC}"
+set_body_font
+display ""
+animate_dots "$(get_symbol "install") Setting up '$ALIAS_NAME' alias for voice recording" 2
+display "${LIME}$(get_symbol "check") Found vox script at: ${WHITE}$VOX_SCRIPT${NC}"
+
+# Create alias line - CLEAN version for file writing (no colors, no symbols)
+ALIAS_LINE="alias $ALIAS_NAME='$VOX_SCRIPT'"
+
+# Remove old 'rec' alias if it exists
+if grep -q "alias rec=" "$ZSHRC" 2>/dev/null; then
+    display "${ORANGE}${SYMBOL_GEAR} Removing old 'rec' alias${NC}"
+    grep -v "alias rec=" "$ZSHRC" > "$ZSHRC.tmp" && mv "$ZSHRC.tmp" "$ZSHRC"
+fi
+
+# Check if custom alias already exists
+if grep -q "alias $ALIAS_NAME=" "$ZSHRC" 2>/dev/null; then
+    display "${ORANGE}${SYMBOL_MAGIC} '$ALIAS_NAME' alias already exists in .zshrc${NC}"
+    display "${GRAY}Current alias:${NC}"
+    display "${WHITE}$(grep "alias $ALIAS_NAME=" "$ZSHRC")${NC}"
+    display ""
+    
+    # Check if running in non-interactive environment
+    if ! is_interactive; then
+        display "${ORANGE}${SYMBOL_MAGIC} Non-interactive mode: keeping existing alias${NC}"
+        reset_font
+        exit 0
+    fi
+    
+    # Interactive prompt with timeout
+    display -n "${LIME}${SYMBOL_MAGIC} Replace it? ${GRAY}(y/n, 10s timeout):${NC} "
+    read -n 1 -r -t 10 REPLY
+    read_result=$?
+    display ""  # Add newline
+    
+    # Handle timeout or no response
+    if [ $read_result -gt 128 ]; then
+        display "${ORANGE}${SYMBOL_MAGIC} No response within 10 seconds, keeping existing alias${NC}"
+        reset_font
+        exit 0
+    fi
+    
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        # Remove old alias and add new one
+        animate_dots "${SYMBOL_GEAR} Updating alias" 2
+        grep -v "alias $ALIAS_NAME=" "$ZSHRC" > "$ZSHRC.tmp" && mv "$ZSHRC.tmp" "$ZSHRC"
+        grep -v "alias vox-debug=" "$ZSHRC" > "$ZSHRC.tmp" && mv "$ZSHRC.tmp" "$ZSHRC"
+        # Write CLEAN alias line to file (no colors, no symbols)
+        echo "$ALIAS_LINE" >> "$ZSHRC"
+        echo "alias vox-debug='$(dirname "$VOX_SCRIPT")/vox-debug'" >> "$ZSHRC"
+        display "${LIME}${SYMBOL_CHECK} Updated '$ALIAS_NAME' alias${NC}"
+    else
+        display "${ORANGE}${SYMBOL_MAGIC} Keeping existing alias${NC}"
+        reset_font
+        exit 0
+    fi
+else
+    # Add new alias
+    animate_dots "${SYMBOL_INSTALL} Installing new alias" 2
+    echo "" >> "$ZSHRC"
+    # Write CLEAN comment and alias to file (no colors, no symbols, no emojis)
+    echo "# Koshi-Code Voice Recorder" >> "$ZSHRC"
+    echo "$ALIAS_LINE" >> "$ZSHRC"
+    echo "alias vox-debug='$(dirname "$VOX_SCRIPT")/vox-debug'" >> "$ZSHRC"
+    display "${LIME}${SYMBOL_CHECK} Added '$ALIAS_NAME' and 'vox-debug' aliases to .zshrc${NC}"
+fi
+
+display ""
+# Success animation
+if is_interactive; then
+    for i in {1..3}; do
+        echo -ne "\r${LIME}${SYMBOL_SPARKLES} Installation complete$(printf '%*s' $i | tr ' ' '.')\033[K" >&2
+        sleep 0.2
+    done
+    echo >&2
+fi
+display ""
+
+set_title_font
+display "${LIME}╭─────────────────────────────────────────────────╮${NC}"
+display "${LIME}│${NC} ${SYMBOL_ROCKET}${LIME}     VOICE-TO-TEXT READY\!     ${SYMBOL_ROCKET} ${LIME}│${NC}"
+display "${LIME}╰─────────────────────────────────────────────────╯${NC}"
+set_body_font
+display ""
+display "${CYAN}${SYMBOL_WAVE} Usage Guide:${NC}"
+display "  ${LIME}${SYMBOL_TERMINAL}${NC} Type: ${WHITE}$ALIAS_NAME${NC} to start recording"
+display "  ${LIME}${SYMBOL_BUG}${NC} Type: ${WHITE}vox-debug${NC} for troubleshooting"
+display "  ${LIME}${SYMBOL_MIC}${NC} Speak your message"
+display "  ${LIME}${SYMBOL_GEAR}${NC} Press ${WHITE}SPACE${NC} or ${WHITE}ENTER${NC} to stop"
+display "  ${LIME}${SYMBOL_CHECK}${NC} Text is automatically copied to clipboard"
+display "  ${LIME}${SYMBOL_SPARKLES}${NC} Paste into Claude Code with ${WHITE}Cmd+V${NC}"
+display ""
+display "${ORANGE}${SYMBOL_TERMINAL} Next Steps:${NC}"
+display "  ${LIME}1.${NC} Reload shell: ${CYAN}source ~/.zshrc${NC}"
+display "  ${LIME}2.${NC} Or start a new terminal session"
+display "  ${LIME}3.${NC} Test with: ${WHITE}$ALIAS_NAME${NC}"
+display ""
+reset_font
+EOF < /dev/null

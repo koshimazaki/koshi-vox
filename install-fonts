@@ -1,0 +1,215 @@
+#!/bin/bash
+# Koshi-Code Font Installer - Downloads and caches fonts for VOX
+# Following UX design principles: scoped font loading without system modification
+
+# Lime-based color scheme
+LIME='\033[38;5;154m'     # Bright lime green
+CYAN='\033[38;5;51m'      # Bright cyan
+ORANGE='\033[38;5;208m'   # Warning orange
+RED='\033[38;5;196m'      # Bright red
+WHITE='\033[38;5;255m'    # Pure white
+GRAY='\033[38;5;240m'     # Subtle gray
+NC='\033[0m'              # No color
+
+# Font cache directory (following UX design principles)
+CACHE_DIR="$HOME/.cache/koshi-code-fonts"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Ensure cache directory exists
+mkdir -p "$CACHE_DIR"
+
+# Animation helper
+animate_download() {
+    local message="$1"
+    local duration="${2:-3}"
+    for i in $(seq 1 $duration); do
+        echo -ne "\r${LIME}${message}$(printf '%*s' $i | tr ' ' '.')\033[K"
+        sleep 0.3
+    done
+    echo
+}
+
+# Check if we need to download fonts
+needs_font_download() {
+    [[ ! -f "$CACHE_DIR/3270-NerdFont-Regular.ttf" ]] || \
+    [[ ! -f "$CACHE_DIR/DepartureMono-Regular.ttf" ]]
+}
+
+# Download and extract nerd font
+download_nerd_font() {
+    local font_name="$1"
+    local download_url="$2"
+    local target_file="$3"
+    
+    if [[ -f "$CACHE_DIR/$target_file" ]]; then
+        echo -e "${LIME}✓ $font_name already cached${NC}"
+        return 0
+    fi
+    
+    echo -e "${CYAN}📦 Downloading $font_name...${NC}"
+    
+    # Create temp directory for extraction
+    local temp_dir=$(mktemp -d)
+    local zip_file="$temp_dir/$font_name.zip"
+    
+    # Download with progress
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL -o "$zip_file" "$download_url" 2>/dev/null
+    elif command -v wget >/dev/null 2>&1; then
+        wget -q -O "$zip_file" "$download_url" 2>/dev/null
+    else
+        echo -e "${RED}✗ Neither curl nor wget available${NC}"
+        return 1
+    fi
+    
+    if [[ ! -f "$zip_file" ]]; then
+        echo -e "${RED}✗ Failed to download $font_name${NC}"
+        rm -rf "$temp_dir"
+        return 1
+    fi
+    
+    # Extract TTF files
+    if command -v unzip >/dev/null 2>&1; then
+        unzip -q "$zip_file" "*.ttf" -d "$temp_dir" 2>/dev/null || true
+        
+        # Find and copy the main regular font file
+        local ttf_file=$(find "$temp_dir" -name "*Regular.ttf" -o -name "*regular.ttf" | head -1)
+        if [[ -n "$ttf_file" ]]; then
+            cp "$ttf_file" "$CACHE_DIR/$target_file"
+            echo -e "${LIME}✓ $font_name installed${NC}"
+        else
+            echo -e "${ORANGE}⚠ Could not find regular variant for $font_name${NC}"
+        fi
+    else
+        echo -e "${RED}✗ unzip not available${NC}"
+        rm -rf "$temp_dir"
+        return 1
+    fi
+    
+    # Cleanup
+    rm -rf "$temp_dir"
+}
+
+# Main installation
+install_koshi_fonts() {
+    echo -e "${LIME}╭─────────────────────────────────────────────────╮${NC}"
+    echo -e "${LIME}│${NC} 🎨${LIME}    KOSHI-CODE FONT INSTALLER    🎨 ${LIME}│${NC}"
+    echo -e "${LIME}╰─────────────────────────────────────────────────╯${NC}"
+    echo
+    
+    if ! needs_font_download; then
+        echo -e "${LIME}✓ All fonts already installed and cached${NC}"
+        echo -e "${GRAY}  Cache location: $CACHE_DIR${NC}"
+        return 0
+    fi
+    
+    echo -e "${CYAN}📦 First run: Installing fonts for beautiful UX...${NC}"
+    echo -e "${GRAY}  Installing to: $CACHE_DIR${NC}"
+    echo
+    
+    # Download 3270 Nerd Font (for body text and symbols)
+    animate_download "📥 Preparing 3270 Nerd Font" 2
+    download_nerd_font "3270-NerdFont" \
+        "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.1.1/3270.zip" \
+        "3270-NerdFont-Regular.ttf"
+    
+    # Download Departure Mono (for titles)  
+    animate_download "📥 Preparing Departure Mono" 2
+    download_nerd_font "DepartureMono" \
+        "https://github.com/rektdeckard/departure-mono/releases/download/v1.346/DepartureMono-Regular.ttf" \
+        "DepartureMono-Regular.ttf"
+    
+    echo
+    echo -e "${LIME}✨ Font installation complete!${NC}"
+    echo -e "${CYAN}🎨 Ready for beautiful terminal UX${NC}"
+    echo
+}
+
+# Create font CSS for VS Code extension use (future)
+generate_font_css() {
+    local css_file="$SCRIPT_DIR/fonts.css"
+    
+    if [[ -f "$CACHE_DIR/3270-NerdFont-Regular.ttf" ]]; then
+        local nerd_font_b64=$(base64 < "$CACHE_DIR/3270-NerdFont-Regular.ttf" | tr -d '\n')
+        local departure_font_b64=""
+        
+        if [[ -f "$CACHE_DIR/DepartureMono-Regular.ttf" ]]; then
+            departure_font_b64=$(base64 < "$CACHE_DIR/DepartureMono-Regular.ttf" | tr -d '\n')
+        fi
+        
+        cat > "$css_file" << 'EOF'
+/* Koshi-Code Font Integration for VS Code Extensions */
+@font-face {
+    font-family: 'KoshiNerd';
+    src: url(data:font/ttf;base64,${nerd_font_b64}) format('truetype');
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'KoshiTitle';
+    src: url(data:font/ttf;base64,${departure_font_b64}) format('truetype');
+    font-display: swap;
+}
+
+/* Koshi-Code UI classes */
+.koshi-ui {
+    font-family: 'KoshiNerd', 'Cascadia Code', 'Fira Code', monospace !important;
+}
+
+.koshi-title {
+    font-family: 'KoshiTitle', 'Departure Mono', 'Cascadia Code', monospace !important;
+    font-weight: bold;
+}
+EOF
+        
+        # Replace placeholders with actual base64 data
+        if [[ -n "$nerd_font_b64" ]]; then
+            sed -i.bak "s/\${nerd_font_b64}/$nerd_font_b64/g" "$css_file"
+        fi
+        if [[ -n "$departure_font_b64" ]]; then
+            sed -i.bak "s/\${departure_font_b64}/$departure_font_b64/g" "$css_file"
+        fi
+        rm -f "$css_file.bak"
+        
+        echo -e "${LIME}✓ Generated VS Code extension CSS${NC}"
+    fi
+}
+
+# Check dependencies
+check_deps() {
+    local missing_deps=()
+    
+    if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
+        missing_deps+=("curl or wget")
+    fi
+    
+    if ! command -v unzip >/dev/null 2>&1; then
+        missing_deps+=("unzip")
+    fi
+    
+    if [[ ${#missing_deps[@]} -gt 0 ]]; then
+        echo -e "${RED}✗ Missing dependencies: ${missing_deps[*]}${NC}"
+        echo -e "${GRAY}  Install with: brew install curl unzip (macOS)${NC}"
+        echo -e "${GRAY}  Install with: apt install curl unzip (Ubuntu)${NC}"
+        return 1
+    fi
+    
+    return 0
+}
+
+# Main execution
+main() {
+    if ! check_deps; then
+        exit 1
+    fi
+    
+    install_koshi_fonts
+    generate_font_css
+    
+    echo -e "${LIME}🚀 Fonts ready for Koshi-Code VOX!${NC}"
+}
+
+# Run if called directly
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi

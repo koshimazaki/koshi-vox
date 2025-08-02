@@ -1,0 +1,76 @@
+{
+  "name": "koshi-vox",
+  "version": "1.1.8",
+  "description": "Voice-To-Text recorder with sound notifications - optimized for macOS",
+  "bin": {
+    "koshi-vox": "./koshi-vox",
+    "vox": "./vox",
+    "vox-debug": "./vox-debug",
+    "setup-vox": "./setup-vox-alias",
+    "uninstall-vox": "./uninstall-vox",
+    "vox-install": "./install.js"
+  },
+  "scripts": {
+    "install": "chmod +x koshi-vox vox vox-debug setup-vox-alias uninstall-vox install.js 2>/dev/null || true",
+    "preuninstall": "echo \"\\n🗑️  Running vox uninstaller...\" && uninstall-vox 2>/dev/null || echo \"Manual cleanup: remove vox aliases from .zshrc\"",
+    "koshi-install": "echo '🎤 Installing vox component to koshi-code...'",
+    "deps": "node install.js"
+  },
+  "keywords": [
+    "voice",
+    "transcription",
+    "whisper",
+    "claude-code",
+    "koshi-code",
+    "macos",
+    "m1-4",
+    "koshi-vox",
+    "clipboard",
+    "speech-to-text",
+    "optional-component"
+  ],
+  "author": "KoshiMazaki",
+  "license": "MIT",
+  "engines": {
+    "pnpm": ">=7.0.0"
+  },
+  "os": [
+    "darwin",
+    "linux"
+  ],
+  "peerDependencies": {
+    "python3": "*"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/koshi-code/scripts.git"
+  },
+  "files": [
+    "koshi-vox",
+    "vox",
+    "vox-debug",
+    "setup-vox-alias",
+    "uninstall-vox",
+    "install.js",
+    "sounds/",
+    "README.md"
+  ],
+  "preferGlobal": true,
+  "koshi-code": {
+    "component": "voice-to-text",
+    "optional": true,
+    "category": "productivity",
+    "dependencies": [
+      "python3",
+      "faster-whisper",
+      "soundfile",
+      "sox"
+    ]
+  },
+  "packageManager": "npm@>=8.0.0",
+  "publishConfig": {
+    "access": "public"
+  }
+}
