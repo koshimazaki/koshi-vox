@@ -17,7 +17,6 @@ Record voice, get instant transcription, and paste directly into your coding ses
 - **Fast M1-4 Transcription**: Optimized for Apple Silicon
 - **Automatic Clipboard**: Text ready to paste with Cmd+V
 - **Customizable Alias**: Choose your preferred command name
-- **Premium UX**: Beautiful terminal interface with proper fonts
 - **Auto-Cleanup**: Keeps only 5 most recent recordings
 
 ## Installation
@@ -43,14 +42,6 @@ cd path/to/koshi-vox/
 npm install -g .
 
 # Set up your voice alias
-setup-vox
-```
-
-### Future: From NPM Registry
-
-```bash
-# Once published (coming soon)
-npm install -g @koshi-code/koshi-vox
 setup-vox
 ```
 
