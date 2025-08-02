@@ -44,9 +44,25 @@ npm install -g @koshi-code/koshi-vox
 setup-vox
 ```
 
+## Structure 
+
+koshi-vox/
+  ├── bin/              # Executables
+  │   ├── koshi-vox
+  │   ├── vox
+  │   └── vox-debug
+  ├── scripts/          # Setup tools
+  │   ├── install.js
+  │   ├── setup-vox-alias
+  │   └── uninstall-vox
+  ├── lib/              # Helpers
+  │   ├── install-deps
+  │   └── install-fonts
+  └── sounds/           # Audio files
+
 ## Requirements
 
-- **Node.js** 14+ (for npm)
+- **Node.js** 18+ (for npm)
 - **Python 3** with packages:
   ```bash
   pip install faster-whisper soundfile
