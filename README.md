@@ -22,6 +22,15 @@ Record voice, get instant transcription, and paste directly into your coding ses
 ## Installation
 
 `npx koshi-vox@latest`
+
+## Dependencies 
+Script Installs 
+- faster-whisper
+- soundfile
+- librosa
+- fastapi
+- uvicorn
+- nerdfonts
  
 ### From Local Directory (Current Method)
 
@@ -45,7 +54,7 @@ setup-vox
 ```
 
 ## Structure 
-
+```
 koshi-vox/
   ├── bin/              # Executables
   │   ├── koshi-vox
@@ -59,7 +68,7 @@ koshi-vox/
   │   ├── install-deps
   │   └── install-fonts
   └── sounds/           # Audio files
-
+```
 ## Requirements
 
 - **Node.js** 18+ (for npm)
