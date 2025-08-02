@@ -373,7 +373,7 @@ async function main() {
 ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝╚═╝      ╚═══╝   ╚═════╝ ╚═╝  ╚═╝${colors.reset}`);
   
   console.log(`${colors.lime}░░░█ Voice-To-Text Recorder for Terminal - optimized for MacOS █░░░${colors.reset}`);
-  console.log(`${colors.lime}░░░ v1.2.1${colors.reset}`);
+  console.log(`${colors.lime}░░░ v1.2.2${colors.reset}`);
   
   // Loading animation
   await animatedLoadingBar('⚡ Initializing installation', 2000);

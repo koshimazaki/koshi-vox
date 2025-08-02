@@ -6,7 +6,7 @@
 ██║  ██╗╚██████╔╝███████║██║  ██║██║     ╚████╔╝ ╚██████╔╝██╔╝ ██╗
 ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝╚═╝      ╚═══╝   ╚═════╝ ╚═╝  ╚═╝
 ░░░█ Voice-To-Text Recorder for Terminal - optimized for MacOS █░░░
-░░ v1.2.1
+░░ v1.2.2
 ```
 Voice-To-Text Recorder for Terminal - optimized for MacOS and M series Macs for Claude Code workflow. 
 Record voice, get instant transcription, and paste directly into your coding sessions.
@@ -18,6 +18,7 @@ Record voice, get instant transcription, and paste directly into your coding ses
 - **Automatic Clipboard**: Text ready to paste with Cmd+V
 - **Customizable Alias**: Choose your preferred command name
 - **Premium UX**: Beautiful terminal interface with proper fonts
+- **Auto-Cleanup**: Keeps only 5 most recent recordings
 
 ## Installation
 
@@ -96,6 +97,12 @@ my-voice-cmd
 
 # Debug mode for troubleshooting
 vox-debug
+
+# Check recording files (auto-cleanup keeps 5 most recent)
+vox-cleanup
+
+# Remove all recording files
+vox-cleanup --all
 ```
 
 ### Recording Workflow

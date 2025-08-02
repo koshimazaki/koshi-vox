@@ -36,6 +36,9 @@ except ImportError as e:
 echo ""
 echo -e "${BLUE}🎤 Starting recording test...${NC}"
 
+# Cleanup old debug recordings first
+find /tmp -name "vox_debug_*.wav" -type f -mmin +60 -delete 2>/dev/null || true
+
 TEMP_FILE="/tmp/vox_debug_$(date +%s).wav"
 
 # Test recording
@@ -78,14 +81,31 @@ fi
 # Test transcription with detailed error reporting
 echo -e "${BLUE}🧠 Testing transcription with detailed logging...${NC}"
 
-python3 << EOF
+# Use base64 encoding to safely pass the file path
+TEMP_FILE_B64=$(echo -n "$TEMP_FILE" | base64)
+
+KOSHI_VOX_TEMP_FILE="$TEMP_FILE_B64" python3 << 'EOF'
 import sys
 import os
 import traceback
+import base64
 
 print("🔍 Starting Python transcription debug...")
 
 try:
+    # Safely decode the file path
+    temp_file_b64 = os.environ.get('KOSHI_VOX_TEMP_FILE', '')
+    if not temp_file_b64:
+        print("❌ No audio file specified in environment")
+        sys.exit(1)
+    
+    temp_file = base64.b64decode(temp_file_b64.encode()).decode('utf-8')
+    
+    # Validate file path (must be in /tmp and exist)
+    if not temp_file.startswith('/tmp/'):
+        print("❌ Invalid audio file path - not in /tmp")
+        sys.exit(1)
+    
     print("📦 Importing modules...")
     from faster_whisper import WhisperModel
     import soundfile as sf
@@ -96,16 +116,16 @@ try:
     model = WhisperModel("tiny", device="cpu", compute_type="int8", cpu_threads=8)
     print("✅ Model initialized successfully")
     
-    print("📂 Loading audio file: $TEMP_FILE")
-    if not os.path.exists("$TEMP_FILE"):
+    print(f"📂 Loading audio file: {temp_file}")
+    if not os.path.exists(temp_file):
         print("❌ Audio file doesn't exist!")
         sys.exit(1)
         
-    file_size = os.path.getsize("$TEMP_FILE")
+    file_size = os.path.getsize(temp_file)
     print(f"📊 File size: {file_size} bytes")
     
     try:
-        audio, sr = sf.read("$TEMP_FILE")
+        audio, sr = sf.read(temp_file)
         print(f"✅ Audio loaded: {len(audio)} samples at {sr}Hz")
         print(f"📊 Audio duration: {len(audio)/sr:.2f} seconds")
         print(f"📊 Audio range: {np.min(audio):.4f} to {np.max(audio):.4f}")

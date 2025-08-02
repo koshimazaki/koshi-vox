@@ -156,6 +156,25 @@ animate_transcribing() {
     echo
 }
 
+# Cleanup old recording files (auto-cleanup after 5 recordings)
+cleanup_old_recordings() {
+    # Count total recording files (macOS compatible)
+    local file_count=$(ls /tmp/quick_rec_*.wav /tmp/vox_debug_*.wav 2>/dev/null | wc -l | tr -d ' ')
+    
+    # If we have more than 5 files, clean up the oldest ones
+    if [ "$file_count" -gt 5 ]; then
+        # Calculate how many files to remove
+        local files_to_remove=$((file_count - 5))
+        
+        # Get list of files sorted by time (oldest first), then remove the oldest
+        ls -t /tmp/quick_rec_*.wav /tmp/vox_debug_*.wav 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null || true
+        
+        # Show cleanup message
+        echo
+        echo -e "${GRAY}🧹 Cleaned up ${files_to_remove} old recording$([ $files_to_remove -gt 1 ] && echo "s")${NC}"
+    fi
+}
+
 # Quick record with spacebar/enter stop
 quick_record() {
     # Stylized header with proper font switching
@@ -169,7 +188,8 @@ quick_record() {
     echo -e "${CYAN}${SYMBOL_RECORD} Starting recording...${NC}"
     animate_pulse "░░██" "Press SPACE or ENTER when done speaking" 2
     
-    TEMP_FILE="/tmp/quick_rec_$(date +%s).wav"
+    # Create secure temp file with mktemp
+    TEMP_FILE=$(mktemp /tmp/quick_rec_XXXXXX.wav)
     
     # Start recording in background (suppress sox output to avoid interference)
     if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -214,10 +234,12 @@ quick_record() {
     animate_transcribing 4
     
     # Direct Python transcription (fastest for quick workflow)
-    TEXT=$(python3 << EOF
+    # Use base64 encoding to safely pass the file path to Python
+    TEMP_FILE_B64=$(echo -n "$TEMP_FILE" | base64)
+    TEXT=$(KOSHI_VOX_TEMP_FILE="$TEMP_FILE_B64" python3 << 'EOF'
 import sys
-import tempfile
-import time
+import base64
+import os
 
 try:
     from faster_whisper import WhisperModel
@@ -227,11 +249,24 @@ except ImportError:
     sys.exit(1)
 
 try:
+    # Safely decode the file path
+    temp_file_b64 = os.environ.get('KOSHI_VOX_TEMP_FILE', '')
+    if not temp_file_b64:
+        print("ERROR: No audio file specified")
+        sys.exit(1)
+    
+    temp_file = base64.b64decode(temp_file_b64.encode()).decode('utf-8')
+    
+    # Validate file path (must be in /tmp and exist)
+    if not temp_file.startswith('/tmp/') or not os.path.exists(temp_file):
+        print("ERROR: Invalid audio file path")
+        sys.exit(1)
+    
     # Quick model load (cached after first use)
     model = WhisperModel("tiny", device="cpu", compute_type="int8", cpu_threads=8)
     
     # Load and transcribe
-    audio, sr = sf.read("$TEMP_FILE", dtype='float32')
+    audio, sr = sf.read(temp_file, dtype='float32')
     
     # Ensure audio is float32 for ONNX compatibility
     import numpy as np
@@ -305,8 +340,11 @@ EOF
     echo -e "${LIME}${SYMBOL_CHECK} Successfully copied to clipboard!${NC}"
     echo -e "${CYAN}░░█ Ready to paste with ${WHITE}Cmd+V${NC}"
     
-    # Cleanup
+    # Cleanup current file
     rm -f "$TEMP_FILE"
+    
+    # Run automatic cleanup if we have more than 5 recordings
+    cleanup_old_recordings
 }
 
 # Check if dependencies exist

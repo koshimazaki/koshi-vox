@@ -1,0 +1,49 @@
+#!/bin/bash
+# Cleanup utility for Koshi-Vox temp files
+
+# Colors
+LIME='\033[38;5;154m'
+CYAN='\033[38;5;51m'
+ORANGE='\033[38;5;208m'
+WHITE='\033[38;5;255m'
+GRAY='\033[38;5;240m'
+NC='\033[0m'
+
+echo -e "${LIME}🧹 Koshi-Vox Cleanup Utility${NC}"
+echo -e "${GRAY}Note: Vox automatically keeps only the 5 most recent recordings${NC}"
+echo
+
+# Check for --all flag
+CLEAN_ALL=false
+if [[ "$1" == "--all" ]] || [[ "$1" == "-a" ]]; then
+    CLEAN_ALL=true
+fi
+
+# Count files (macOS compatible)
+FILE_COUNT=$(ls /tmp/quick_rec_*.wav /tmp/vox_debug_*.wav 2>/dev/null | wc -l | tr -d ' ')
+
+if [ "$FILE_COUNT" -eq 0 ]; then
+    echo -e "${CYAN}✨ No recording files found in /tmp${NC}"
+    exit 0
+fi
+
+echo -e "${WHITE}Found ${FILE_COUNT} recording files in /tmp${NC}"
+
+# List files with details
+echo -e "${CYAN}Current recordings:${NC}"
+ls -lht /tmp/quick_rec_*.wav /tmp/vox_debug_*.wav 2>/dev/null | grep -v "^total" | while read -r perms links owner group size month day time filename; do
+    # filename is the full path, extract just the basename
+    basename_file=$(basename "$filename")
+    echo -e "  ${GRAY}$month $day $time  ${WHITE}$size  ${CYAN}$basename_file${NC}"
+done
+echo
+
+if [ "$CLEAN_ALL" = true ]; then
+    echo -e "${ORANGE}⚠️  Cleaning ALL recording files...${NC}"
+    rm -f /tmp/quick_rec_*.wav /tmp/vox_debug_*.wav 2>/dev/null
+    echo -e "${LIME}✓ Cleaned up ${FILE_COUNT} recording files${NC}"
+else
+    echo -e "${GRAY}Options:${NC}"
+    echo -e "  ${WHITE}vox-cleanup --all${NC}  - Remove all recordings"
+    echo -e "  ${GRAY}(Auto-cleanup keeps only 5 most recent files)${NC}"
+fi
