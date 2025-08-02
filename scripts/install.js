@@ -373,8 +373,9 @@ async function main() {
 ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝╚═╝      ╚═══╝   ╚═════╝ ╚═╝  ╚═╝${colors.reset}`);
   
   console.log(`${colors.lime}░░░█ Voice-To-Text Recorder for Terminal - optimized for MacOS █░░░${colors.reset}`);
-  console.log(`${colors.lime}░░░ v1.2.2${colors.reset}`);
-  
+  console.log(`${colors.lime}░░░ v1.2.3${colors.reset}`);
+  console.log(`${colors.lime}░░░░░░░░░░░ https://github.com/koshimazaki/koshi-vox${colors.reset}`);
+
   // Loading animation
   await animatedLoadingBar('⚡ Initializing installation', 2000);
   console.log('');

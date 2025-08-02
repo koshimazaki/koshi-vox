@@ -255,7 +255,7 @@ fi
 # Animated title with lime theme and proper font switching
 set_title_font
 display "${LIME}╭─────────────────────────────────────────────────╮${NC}"
-display "${LIME}│${NC} $(get_symbol "voice")${LIME}  KOSHI-CODE VOX VOICE-TO-TEXT SETUP  $(get_symbol "voice") ${LIME}│${NC}"
+display "${LIME}│${NC} $(get_symbol "voice")${LIME}  KOSHI-CODE VOX VOICE-TO-TEXT SETUP  $(get_symbol "voice")        ${LIME}│${NC}"
 display "${LIME}╰─────────────────────────────────────────────────╯${NC}"
 set_body_font
 display ""

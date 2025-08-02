@@ -1,6 +1,6 @@
 {
   "name": "koshi-vox",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Voice-To-Text recorder with sound notifications - optimized for macOS",
   "bin": {
     "koshi-vox": "./bin/koshi-vox",

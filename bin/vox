@@ -266,12 +266,11 @@ try:
     model = WhisperModel("tiny", device="cpu", compute_type="int8", cpu_threads=8)
     
     # Load and transcribe
-    audio, sr = sf.read(temp_file, dtype='float32')
+    audio, sr = sf.read(temp_file)
     
     # Ensure audio is float32 for ONNX compatibility
     import numpy as np
-    if audio.dtype != np.float32:
-        audio = audio.astype(np.float32)
+    audio = np.array(audio, dtype=np.float32)
     
     # Ensure audio is in the right shape (1D array)
     if len(audio.shape) > 1:

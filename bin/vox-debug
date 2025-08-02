@@ -126,6 +126,8 @@ try:
     
     try:
         audio, sr = sf.read(temp_file)
+        # Ensure float32 for ONNX compatibility
+        audio = np.array(audio, dtype=np.float32)
         print(f"✅ Audio loaded: {len(audio)} samples at {sr}Hz")
         print(f"📊 Audio duration: {len(audio)/sr:.2f} seconds")
         print(f"📊 Audio range: {np.min(audio):.4f} to {np.max(audio):.4f}")

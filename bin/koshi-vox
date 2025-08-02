@@ -2,6 +2,9 @@
 # Koshi-Vox Main Entry Point
 # Always shows installer when running via npx
 
+
+
+
 # Get the actual directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -17,15 +20,14 @@ fi
 # Check if we're running via npx - always show installer for npx users
 if [[ "$npm_config_yes" == "true" ]] || [[ "$SCRIPT_DIR" == *"/_npx/"* ]] || [[ "$SCRIPT_DIR" == *"/.npm/"* ]]; then
     # Running via npx - always show full installer experience
-    echo "🎤 Welcome to KOSHI-VOX!"
+    echo "░░░ Welcome to KOSHI-VOX! ░░░"
     echo
     node "$PACKAGE_DIR/scripts/install.js"
     
     # After installation, run the voice recorder
     if [ $? -eq 0 ]; then
         echo
-        echo "🚀 Setup complete! Starting voice recorder..."
-        echo
+      #  echo "░░░ Setup complete! Starting voice recorder..."
         exec "$PACKAGE_DIR/bin/vox"
     else
         echo "❌ Setup failed. Please run 'setup-vox' manually."
