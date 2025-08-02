@@ -6,7 +6,7 @@
 ██║  ██╗╚██████╔╝███████║██║  ██║██║     ╚████╔╝ ╚██████╔╝██╔╝ ██╗
 ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝╚═╝      ╚═══╝   ╚═════╝ ╚═╝  ╚═╝
 ░░░█ Voice-To-Text Recorder for Terminal - optimized for MacOS █░░░
-░░ v1.1.8
+░░ v1.2.1
 ```
 Voice-To-Text Recorder for Terminal - optimized for MacOS and M series Macs for Claude Code workflow. 
 Record voice, get instant transcription, and paste directly into your coding sessions.
@@ -22,6 +22,15 @@ Record voice, get instant transcription, and paste directly into your coding ses
 ## Installation
 
 `npx koshi-vox@latest`
+
+## Dependencies 
+Script Installs 
+- faster-whisper
+- soundfile
+- librosa
+- fastapi
+- uvicorn
+- nerdfonts
  
 ### From Local Directory (Current Method)
 
@@ -44,9 +53,25 @@ npm install -g @koshi-code/koshi-vox
 setup-vox
 ```
 
+## Structure 
+```
+koshi-vox/
+  ├── bin/              # Executables
+  │   ├── koshi-vox
+  │   ├── vox
+  │   └── vox-debug
+  ├── scripts/          # Setup tools
+  │   ├── install.js
+  │   ├── setup-vox-alias
+  │   └── uninstall-vox
+  ├── lib/              # Helpers
+  │   ├── install-deps
+  │   └── install-fonts
+  └── sounds/           # Audio files
+```
 ## Requirements
 
-- **Node.js** 14+ (for npm)
+- **Node.js** 18+ (for npm)
 - **Python 3** with packages:
   ```bash
   pip install faster-whisper soundfile
