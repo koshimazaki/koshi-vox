@@ -3,18 +3,18 @@
   "version": "1.1.8",
   "description": "Voice-To-Text recorder with sound notifications - optimized for macOS",
   "bin": {
-    "koshi-vox": "./koshi-vox",
-    "vox": "./vox",
-    "vox-debug": "./vox-debug",
-    "setup-vox": "./setup-vox-alias",
-    "uninstall-vox": "./uninstall-vox",
-    "vox-install": "./install.js"
+    "koshi-vox": "./bin/koshi-vox",
+    "vox": "./bin/vox",
+    "vox-debug": "./bin/vox-debug",
+    "setup-vox": "./scripts/setup-vox-alias",
+    "uninstall-vox": "./scripts/uninstall-vox",
+    "vox-install": "./scripts/install.js"
   },
   "scripts": {
-    "install": "chmod +x koshi-vox vox vox-debug setup-vox-alias uninstall-vox install.js 2>/dev/null || true",
-    "preuninstall": "echo \"\\n🗑️  Running vox uninstaller...\" && uninstall-vox 2>/dev/null || echo \"Manual cleanup: remove vox aliases from .zshrc\"",
+    "install": "chmod +x bin/koshi-vox bin/vox bin/vox-debug scripts/setup-vox-alias scripts/uninstall-vox scripts/install.js 2>/dev/null || true",
+    "preuninstall": "echo \"\\n🗑️  Running vox uninstaller...\" && scripts/uninstall-vox 2>/dev/null || echo \"Manual cleanup: remove vox aliases from .zshrc\"",
     "koshi-install": "echo '🎤 Installing vox component to koshi-code...'",
-    "deps": "node install.js"
+    "deps": "node scripts/install.js"
   },
   "keywords": [
     "voice",
@@ -48,12 +48,9 @@
     "url": "https://github.com/koshi-code/scripts.git"
   },
   "files": [
-    "koshi-vox",
-    "vox",
-    "vox-debug",
-    "setup-vox-alias",
-    "uninstall-vox",
-    "install.js",
+    "bin/",
+    "scripts/",
+    "lib/",
     "sounds/",
     "README.md"
   ],

@@ -354,4 +354,3 @@ display "  ${LIME}2.${NC} Or start a new terminal session"
 display "  ${LIME}3.${NC} Test with: ${WHITE}$ALIAS_NAME${NC}"
 display ""
 reset_font
-EOF < /dev/null

@@ -10,7 +10,8 @@ if [[ "$SCRIPT_DIR" == *"/.bin"* ]]; then
     # Running from .bin directory - find the actual package
     PACKAGE_DIR="$(cd "$SCRIPT_DIR/../koshi-vox" && pwd)"
 else
-    PACKAGE_DIR="$SCRIPT_DIR"
+    # Running from bin directory - go up one level
+    PACKAGE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 fi
 
 # Check if we're running via npx - always show installer for npx users
@@ -18,14 +19,14 @@ if [[ "$npm_config_yes" == "true" ]] || [[ "$SCRIPT_DIR" == *"/_npx/"* ]] || [[ 
     # Running via npx - always show full installer experience
     echo "🎤 Welcome to KOSHI-VOX!"
     echo
-    node "$PACKAGE_DIR/install.js"
+    node "$PACKAGE_DIR/scripts/install.js"
     
     # After installation, run the voice recorder
     if [ $? -eq 0 ]; then
         echo
         echo "🚀 Setup complete! Starting voice recorder..."
         echo
-        exec "$PACKAGE_DIR/vox"
+        exec "$PACKAGE_DIR/bin/vox"
     else
         echo "❌ Setup failed. Please run 'setup-vox' manually."
         exit 1
@@ -65,20 +66,20 @@ except ImportError:
         # First run - show installer
         echo "🎤 Welcome to Koshi-Vox! Running first-time setup..."
         echo
-        node "$PACKAGE_DIR/install.js"
+        node "$PACKAGE_DIR/scripts/install.js"
         
         # After installation, run the voice recorder
         if [ $? -eq 0 ]; then
             echo
             echo "🚀 Setup complete! Starting voice recorder..."
             echo
-            exec "$PACKAGE_DIR/vox"
+            exec "$PACKAGE_DIR/bin/vox"
         else
             echo "❌ Setup failed. Please run 'setup-vox' manually."
             exit 1
         fi
     else
         # Dependencies exist - run voice recorder directly
-        exec "$PACKAGE_DIR/vox"
+        exec "$PACKAGE_DIR/bin/vox"
     fi
 fi
