@@ -1,0 +1,404 @@
+#!/bin/bash
+# Comprehensive Uninstall Script for Koshi-Code Vox
+# Reads installation log and removes exactly what was installed
+
+# Lime-based color scheme
+LIME='\033[38;5;154m'
+CYAN='\033[38;5;51m'
+ORANGE='\033[38;5;208m'
+RED='\033[38;5;196m'
+WHITE='\033[38;5;255m'
+GRAY='\033[38;5;240m'
+PURPLE='\033[38;5;135m'
+BLUE='\033[38;5;33m'
+PINK='\033[38;5;198m'
+
+NC='\033[0m'
+
+# Terminal font switching
+FONTS_TITLE='\x1b]1337;SetFont=DepartureMono-Regular\x07'
+FONTS_BODY='\x1b]1337;SetFont=3270-NerdFont\x07'
+FONTS_RESET='\x1b]1337;SetFont=\x07'
+
+# Nerd Font symbols
+SYMBOL_CROSS='󰅖'
+SYMBOL_CHECK='󰄬'
+SYMBOL_GEAR='󰒓'
+SYMBOL_TRASH='󰆴'
+SYMBOL_WARNING='󰀪'
+SYMBOL_SPARKLES='󰝴'
+SYMBOL_PYTHON='󰌠'
+SYMBOL_FOLDER='󰉋'
+SYMBOL_PACKAGE='󰏗'
+SYMBOL_LOADING='󰔟'
+SYMBOL_INFO='󰋽'
+SYMBOL_LOG='󰈙'
+
+# Paths
+ZSHRC="$HOME/.zshrc"
+CONFIG_DIR="$HOME/.config/koshi-vox"
+INSTALL_LOG="$CONFIG_DIR/installation.json"
+
+# Variables to store what was installed
+VENV_PATH=""
+NPM_PACKAGE=""
+NPM_VERSION=""
+PYTHON_PACKAGES=()
+FONT_PATHS=()
+SHELL_BACKUP=""
+CACHE_DIRS=()
+HOMEBREW_INSTALLED=""
+PYTHON_INSTALLED=""
+
+# Progress tracking
+TOTAL_STEPS=0
+CURRENT_STEP=0
+
+# Function to show progress
+show_progress() {
+    local current=$1
+    local total=$2
+    local width=40
+    local percentage=$((current * 100 / total))
+    local filled=$((current * width / total))
+    local empty=$((width - filled))
+    
+    printf "\r${CYAN}["
+    printf "█%.0s" $(seq 1 $filled)
+    printf "░%.0s" $(seq 1 $empty)
+    printf "] ${percentage}%% ${NC}"
+}
+
+# Function to read and parse installation log
+parse_install_log() {
+    if [[ ! -f "$INSTALL_LOG" ]]; then
+        echo -e "${PINK}${SYMBOL_WARNING} No installation log found${NC}"
+        echo -e "${GRAY}This uninstaller requires the installation log to know what to remove.${NC}"
+        echo -e "${GRAY}Log location: ${WHITE}$INSTALL_LOG${NC}"
+        return 1
+    fi
+    
+    #echo -e "${CYAN}${SYMBOL_LOG} Reading installation log...${NC}"
+    
+    # Check if jq is available
+    if ! command -v jq &>/dev/null; then
+        echo -e "${ORANGE}${SYMBOL_WARNING} 'jq' not found. Installing for JSON parsing...${NC}"
+        if [[ "$OSTYPE" == "darwin"* ]] && command -v brew &>/dev/null; then
+            brew install jq
+        else
+            echo -e "${PINK}Please install 'jq' manually to continue${NC}"
+            return 1
+        fi
+    fi
+    
+    # Parse the log
+    INSTALL_DATE=$(jq -r '.installedAt // "unknown"' "$INSTALL_LOG" 2>/dev/null)
+    VENV_PATH=$(jq -r '.components.virtualEnv.path // ""' "$INSTALL_LOG" 2>/dev/null)
+    NPM_PACKAGE=$(jq -r 'if .components.npmPackage.installed then "installed" else "" end' "$INSTALL_LOG" 2>/dev/null)
+    NPM_VERSION=$(jq -r '.components.npmPackage.version // ""' "$INSTALL_LOG" 2>/dev/null)
+    SHELL_BACKUP=$(jq -r '.components.shellConfig.backupPath // ""' "$INSTALL_LOG" 2>/dev/null)
+    
+    # Check if Homebrew/Python were installed by Koshi
+    HOMEBREW_INSTALLED=$(jq -r 'if .components.homebrew.installedByKoshi then "yes" else "no" end' "$INSTALL_LOG" 2>/dev/null)
+    PYTHON_INSTALLED=$(jq -r 'if .components.python.installedByKoshi then "yes" else "no" end' "$INSTALL_LOG" 2>/dev/null)
+    
+    # Get Python packages (macOS compatible)
+    PYTHON_PACKAGES=()
+    while IFS= read -r pkg; do
+        [[ -n "$pkg" ]] && PYTHON_PACKAGES+=("$pkg")
+    done < <(jq -r '.components.pythonPackages[]?.name // empty' "$INSTALL_LOG" 2>/dev/null)
+    
+    # Get font paths (macOS compatible)
+    FONT_PATHS=()
+    while IFS= read -r font; do
+        [[ -n "$font" ]] && FONT_PATHS+=("$font")
+    done < <(jq -r '.components.fonts[]?.path // empty' "$INSTALL_LOG" 2>/dev/null)
+    
+    # Add standard cache directories
+    CACHE_DIRS=("$HOME/.cache/koshi-code-fonts" "$HOME/.cache/whisper")
+    
+    # Count total steps
+    TOTAL_STEPS=1  # NPM package
+    [[ -n "$VENV_PATH" ]] && ((TOTAL_STEPS++))
+    [[ ${#PYTHON_PACKAGES[@]} -gt 0 ]] && ((TOTAL_STEPS++))
+    [[ ${#FONT_PATHS[@]} -gt 0 ]] && ((TOTAL_STEPS++))
+    [[ ${#CACHE_DIRS[@]} -gt 0 ]] && ((TOTAL_STEPS++))
+    ((TOTAL_STEPS++))  # Shell config
+    ((TOTAL_STEPS++))  # Final cleanup
+    
+    echo -e "${LIME}${SYMBOL_CHECK} Installation log parsed successfully${NC}"
+    echo -e "${GRAY}Installation date: ${LIME}$INSTALL_DATE${NC}"
+    echo
+    
+    return 0
+}
+
+# Display what will be removed
+display_removal_summary() {
+    echo -e "${CYAN}${SYMBOL_WARNING} Based on the installation log, this will remove:${NC}"
+    echo
+    
+    if [[ "$NPM_PACKAGE" == "installed" ]]; then
+        echo -e "${CYAN}📦 NPM Package(only removes koshi-vox package)${NC}"
+        echo -e "  ${GRAY}• Package: ${CYAN}koshi-vox (global npm package)${NC}"
+        [[ -n "$NPM_VERSION" ]] && echo -e "  ${GRAY}• Version: ${CYAN}$NPM_VERSION${NC}"
+        #echo -e "  ${CYAN}${SYMBOL_INFO} Only removes the koshi-vox package, not npm or node${NC}"
+        #echo
+    fi
+    
+    if [[ -n "$VENV_PATH" ]] && [[ -d "$VENV_PATH" ]]; then
+        local SIZE=$(du -sh "$VENV_PATH" 2>/dev/null | cut -f1)
+        echo -e "${PURPLE}${SYMBOL_PYTHON} Python Virtual Environment${NC}"
+        echo -e "  ${GRAY}• Path: ${LIME}$VENV_PATH${NC}"
+        [[ -n "$SIZE" ]] && echo -e "  ${GRAY}• Size: ${LIME}$SIZE${NC}"
+        echo -e "  ${LIME}${SYMBOL_INFO} This is isolated - safe to remove${NC}"
+        echo
+    fi
+    
+    if [[ ${#PYTHON_PACKAGES[@]} -gt 0 ]]; then
+        echo -e "${PURPLE}${SYMBOL_PYTHON} Python Packages (${#PYTHON_PACKAGES[@]} packages)${NC}"
+        echo -e "  ${LIME}${SYMBOL_INFO} All packages are in the virtual environment${NC}"
+        echo -e "  ${LIME}${SYMBOL_INFO} System Python packages will NOT be touched${NC}"
+        for pkg in "${PYTHON_PACKAGES[@]}"; do
+            echo -e "  ${GRAY}• ${LIME}$pkg${GRAY} (venv only)${NC}"
+        done
+        echo
+    fi
+    
+    if [[ ${#FONT_PATHS[@]} -gt 0 ]]; then
+        echo -e "${LIME}${SYMBOL_FOLDER} Downloaded Fonts${NC}"
+        for font in "${FONT_PATHS[@]}"; do
+            if [[ -f "$font" ]]; then
+                echo -e "  ${GRAY}• ${LIME}$(basename "$font")${NC}"
+            fi
+        done
+        echo
+    fi
+    
+    local TOTAL_CACHE_SIZE=0
+    echo -e "${LIME}${SYMBOL_FOLDER} Cache Directories${NC}"
+    for dir in "${CACHE_DIRS[@]}"; do
+        if [[ -d "$dir" ]]; then
+            local SIZE=$(du -sh "$dir" 2>/dev/null | cut -f1)
+            echo -e "  ${GRAY}• ${LIME}$dir${GRAY} ($SIZE)${NC}"
+        fi
+    done
+    echo
+    
+    echo -e "${CYAN}⚙️  Configuration${NC}"
+    echo -e "  ${GRAY}• Shell config modifications from ${CYAN}.zshrc${NC}"
+    [[ -n "$SHELL_BACKUP" ]] && echo -e "  ${GRAY}• Backup available: ${CYAN}$(basename "$SHELL_BACKUP")${NC}"
+    echo
+    
+    # Safety notice
+    echo -e "${PURPLE}╭─────────────────────────────────────────────────────────────────╮${NC}"
+    echo -e "${PURPLE}│ ${SYMBOL_INFO}  SAFETY NOTICE                                                │${NC}"
+    echo -e "${PURPLE}├─────────────────────────────────────────────────────────────────┤${NC}"
+    echo -e "${PURPLE}│${NC} This uninstaller will ${LIME}ONLY${NC} remove:                            ${PURPLE}  │${NC}"
+    echo -e "${PURPLE}│${NC}   • Components installed by Koshi-Vox                           ${PURPLE}│${NC}"
+    echo -e "${PURPLE}│${NC}   • Items logged in the installation file                       ${PURPLE}│${NC}"
+    echo -e "${PURPLE}│${NC}                                                                 ${PURPLE}│${NC}"
+    echo -e "${PURPLE}│${NC} It will ${PINK}NOT${NC} remove:                                             ${PURPLE}│${NC}"
+    echo -e "${PURPLE}│${NC}   • System Python or Homebrew Python                            ${PURPLE}│${NC}"
+    echo -e "${PURPLE}╰─────────────────────────────────────────────────────────────────╯${NC}"
+    echo
+}
+
+# Main uninstall process
+main() {
+    clear
+    echo -e "${FONTS_TITLE}"
+    echo -e "${PURPLE}╭─────────────────────────────────────────────────────────╮${NC}"
+    echo -e "${PURPLE}│       ${NC}☠️    ${PURPLE}░░░█ KOSHI-VOX UNINSTALLER █░░░${NC}    ☠️ ${PURPLE}      │${NC}"
+    echo -e "${PURPLE}╰─────────────────────────────────────────────────────────╯${NC}"
+    echo -e "${FONTS_BODY}"
+
+    
+    # Parse installation log
+    if ! parse_install_log; then
+        echo -e "${PINK}Cannot proceed without installation log.${NC}"
+        echo -e "${GRAY}If you want to remove Koshi-Vox manually, delete:${NC}"
+        echo -e "  ${WHITE}• ~/.koshi-vox-env${NC}"
+        echo -e "  ${WHITE}• ~/.cache/koshi-code-fonts${NC}"
+        echo -e "  ${WHITE}• ~/.cache/whisper${NC}"
+        echo -e "  ${WHITE}• Remove vox aliases from ~/.zshrc${NC}"
+        echo -e "${FONTS_RESET}"
+        exit 1
+    fi
+    
+    # Display what will be removed
+    display_removal_summary
+    
+    # Confirmation
+    echo -e "${PINK}${SYMBOL_WARNING} This action cannot be undone!${NC}"
+    echo
+    echo -n -e "${LIME}${SYMBOL_GEAR} Proceed with complete uninstall? ${GRAY}[y/N]:${NC} "
+    read -r -n 1 REPLY
+    echo
+    
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo
+        echo -e "${LIME}${SYMBOL_CHECK} Uninstall cancelled${NC}"
+        echo -e "${FONTS_RESET}"
+        exit 0
+    fi
+    
+    echo
+    echo -e "${CYAN}${SYMBOL_LOADING} Starting comprehensive uninstall...${NC}"
+    echo
+    
+    # Remove NPM package
+    if [[ "$NPM_PACKAGE" == "installed" ]]; then
+        echo -e "${CYAN}${SYMBOL_PACKAGE} Removing npm package...${NC}"
+        if npm list -g koshi-vox &>/dev/null || npm list -g @koshi-code/vox-voice-to-text &>/dev/null; then
+            npm uninstall -g koshi-vox @koshi-code/vox-voice-to-text &>/dev/null
+            echo -e "${LIME}${SYMBOL_CHECK} Removed npm package${NC}"
+        else
+            echo -e "${GRAY}${SYMBOL_GEAR} Package already removed${NC}"
+        fi
+        ((CURRENT_STEP++))
+        show_progress $CURRENT_STEP $TOTAL_STEPS
+        echo
+    fi
+    
+    # Remove virtual environment
+    if [[ -n "$VENV_PATH" ]] && [[ -d "$VENV_PATH" ]]; then
+        echo -e "\n${PURPLE}${SYMBOL_PYTHON} Removing Python virtual environment...${NC}"
+        SIZE=$(du -sh "$VENV_PATH" | cut -f1)
+        rm -rf "$VENV_PATH"
+        echo -e "${LIME}${SYMBOL_CHECK} Removed virtual environment (${LIME}$SIZE${LIME})${NC}"
+        ((CURRENT_STEP++))
+        show_progress $CURRENT_STEP $TOTAL_STEPS
+        echo
+    fi
+    
+    # Note about Python packages (they're in venv, so already removed)
+    if [[ ${#PYTHON_PACKAGES[@]} -gt 0 ]]; then
+        echo -e "\n${PURPLE}${SYMBOL_PYTHON} Python packages${NC}"
+        echo -e "${LIME}${SYMBOL_CHECK} All ${#PYTHON_PACKAGES[@]} packages removed with virtual environment${NC}"
+        ((CURRENT_STEP++))
+        show_progress $CURRENT_STEP $TOTAL_STEPS
+        echo
+    fi
+    
+    # Remove fonts
+    if [[ ${#FONT_PATHS[@]} -gt 0 ]]; then
+        echo -e "\n${LIME}${SYMBOL_FOLDER} Removing fonts...${NC}"
+        local removed=0
+        for font in "${FONT_PATHS[@]}"; do
+            if [[ -f "$font" ]]; then
+                rm -f "$font"
+                ((removed++))
+            fi
+        done
+        echo -e "${LIME}${SYMBOL_CHECK} Removed $removed font files${NC}"
+        ((CURRENT_STEP++))
+        show_progress $CURRENT_STEP $TOTAL_STEPS
+        echo
+    fi
+    
+    # Remove cache directories
+    echo -e "\n${LIME}${SYMBOL_FOLDER} Cleaning cache directories...${NC}"
+    local total_freed=0
+    for dir in "${CACHE_DIRS[@]}"; do
+        if [[ -d "$dir" ]]; then
+            SIZE=$(du -sh "$dir" 2>/dev/null | cut -f1)
+            rm -rf "$dir"
+            echo -e "${LIME}${SYMBOL_CHECK} Removed ${LIME}$(basename "$dir")${LIME} ($SIZE)${NC}"
+        fi
+    done
+    ((CURRENT_STEP++))
+    show_progress $CURRENT_STEP $TOTAL_STEPS
+    echo
+    
+    # Clean shell configuration
+    echo -e "\n${CYAN}${SYMBOL_GEAR} Cleaning shell configuration...${NC}"
+    if [[ -f "$ZSHRC" ]]; then
+        # Create new backup before cleaning
+        CLEANUP_BACKUP="$ZSHRC.backup-vox-uninstall-$(date +%s)"
+        cp "$ZSHRC" "$CLEANUP_BACKUP"
+        echo -e "  ${GRAY}${SYMBOL_CHECK} Created backup: ${LIME}$(basename "$CLEANUP_BACKUP")${NC}"
+        
+        # Remove all Koshi-Vox related lines
+        grep -v -E "(Koshi-Code Voice Recorder|Koshi-VOX|KOSHI_VOX_VENV|KOSHI_VOX_PYTHON|alias vox=|alias vox-debug=|alias setup-vox=|Koshi-Vox Python Environment)" "$ZSHRC" > "$ZSHRC.tmp" && mv "$ZSHRC.tmp" "$ZSHRC"
+        
+        echo -e "  ${LIME}${SYMBOL_CHECK} Cleaned shell configuration${NC}"
+        
+        if [[ -n "$SHELL_BACKUP" ]] && [[ -f "$SHELL_BACKUP" ]]; then
+            echo -e "  ${GRAY}${SYMBOL_INFO} Original backup preserved: ${LIME}$(basename "$SHELL_BACKUP")${NC}"
+        fi
+    fi
+    ((CURRENT_STEP++))
+    show_progress $CURRENT_STEP $TOTAL_STEPS
+    echo
+    
+    # Final cleanup - remove installation log and config
+    echo -e "\n${CYAN}${SYMBOL_GEAR} Final cleanup...${NC}"
+    if [[ -f "$INSTALL_LOG" ]]; then
+        rm -f "$INSTALL_LOG"
+        echo -e "  ${LIME}${SYMBOL_CHECK} Removed installation log${NC}"
+    fi
+    
+    if [[ -d "$CONFIG_DIR" ]] && [[ -z "$(ls -A "$CONFIG_DIR")" ]]; then
+        rmdir "$CONFIG_DIR"
+        echo -e "  ${LIME}${SYMBOL_CHECK} Removed config directory${NC}"
+    fi
+    
+    ((CURRENT_STEP++))
+    show_progress $CURRENT_STEP $TOTAL_STEPS
+    echo
+    echo
+    
+    echo -e "${CYAN}${SYMBOL_CHECK}░░░█ Successfully removed all the components █░░░${NC}"
+    echo
+    
+    # Show what was installed but not removed
+    if [[ "$HOMEBREW_INSTALLED" == "yes" ]] || [[ "$PYTHON_INSTALLED" == "yes" ]]; then
+        echo -e "${PURPLE}╭─────────────────────────────────────────────────────────────────╮${NC}"
+        echo -e "${PURPLE}│ ${SYMBOL_INFO}  SYSTEM COMPONENTS INSTALLED BUT NOT REMOVED                 │${NC}"
+        echo -e "${PURPLE}╰─────────────────────────────────────────────────────────────────╯${NC}"
+        echo
+        
+        if [[ "$HOMEBREW_INSTALLED" == "yes" ]]; then
+            echo -e "${PURPLE}🍺 Homebrew${NC}"
+            echo -e "  ${GRAY}• Installed by Koshi-Vox during setup${NC}"
+            echo -e "  ${GRAY}• Location: ${WHITE}/opt/homebrew${NC} (Apple Silicon) or ${WHITE}/usr/local${NC} (Intel)"
+            echo -e "  ${GRAY}• Other applications may depend on it${NC}"
+            echo -e "  ${CYAN}To remove manually:${NC}"
+            echo -e "    ${WHITE}/bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/uninstall.sh)\"${NC}"
+            echo
+        fi
+        
+        if [[ "$PYTHON_INSTALLED" == "yes" ]]; then
+            echo -e "${PURPLE}${SYMBOL_PYTHON} Python 3.11${NC}"
+            echo -e "  ${GRAY}• Installed via Homebrew by Koshi-Vox${NC}"
+            echo -e "  ${GRAY}• System-wide installation${NC}"
+            echo -e "  ${GRAY}• Other applications may use it${NC}"
+            echo -e "  ${CYAN}To remove manually:${NC}"
+            echo -e "    ${WHITE}brew uninstall python@3.11${NC}"
+            echo -e "  ${PURPLE}${SYMBOL_WARNING} Warning: This may affect other Python applications${NC}"
+            echo
+        fi
+        
+        echo -e "${GRAY}These are system-level components that were installed to support${NC}"
+        echo -e "${GRAY}Koshi-Vox but may be used by other applications. Remove them only${NC}"
+        echo -e "${GRAY}if you're sure no other applications depend on them.${NC}"
+        echo
+    fi
+    
+    echo -e "${GRAY}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${PURPLE}${SYMBOL_GEAR} Next steps:${NC}"
+    echo -e "  ${LIME}1.${NC} Reload your shell: ${CYAN}source ~/.zshrc${NC}"
+    echo -e "  ${LIME}2.${NC} Or start a new terminal session"
+    echo
+    
+    echo -e "${GRAY}To reinstall Koshi-Vox:${NC}"
+    echo -e "  ${CYAN}node /path/to/install.js${NC}"
+    echo
+    
+    echo -e "${GRAY}Thank you for using Koshi-Code Vox! ${SYMBOL_SPARKLES}${NC}"
+    echo -e "${FONTS_RESET}"
+}
+
+# Run main function
+main

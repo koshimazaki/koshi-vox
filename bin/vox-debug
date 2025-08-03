@@ -113,7 +113,7 @@ try:
     print("✅ All modules imported successfully")
     
     print("🔧 Initializing Whisper model...")
-    model = WhisperModel("tiny", device="cpu", compute_type="int8", cpu_threads=8)
+    model = WhisperModel("base", device="cpu", compute_type="int8", cpu_threads=8)
     print("✅ Model initialized successfully")
     
     print(f"📂 Loading audio file: {temp_file}")

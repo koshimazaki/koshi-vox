@@ -6,7 +6,7 @@
 ██║  ██╗╚██████╔╝███████║██║  ██║██║     ╚████╔╝ ╚██████╔╝██╔╝ ██╗
 ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝╚═╝      ╚═══╝   ╚═════╝ ╚═╝  ╚═╝
 ░░░█ Voice-To-Text Recorder for Terminal - optimized for MacOS █░░░
-░░ v1.2.3
+░░ v1.2.5
 ```
 Voice-To-Text Recorder for Terminal - optimized for MacOS and M series Macs for Claude Code workflow. 
 Record voice, get instant transcription, and paste directly into your coding sessions.
@@ -16,6 +16,8 @@ Record voice, get instant transcription, and paste directly into your coding ses
 - **Instant Voice Recording**: Press SPACE or ENTER to stop
 - **Fast M1-4 Transcription**: Optimized for Apple Silicon
 - **Automatic Clipboard**: Text ready to paste with Cmd+V
+- **Isolated Python Environment**: Zero system dependencies conflicts
+- **Smart Uninstaller**: Complete removal with installation tracking
 - **Customizable Alias**: Choose your preferred command name
 - **Auto-Cleanup**: Keeps only 5 most recent recordings
 
@@ -55,7 +57,7 @@ koshi-vox/
   ├── scripts/          # Setup tools
   │   ├── install.js
   │   ├── setup-vox-alias
-  │   └── uninstall-vox
+  │   └── uninstall_koshi-vox
   ├── lib/              # Helpers
   │   ├── install-deps
   │   └── install-fonts

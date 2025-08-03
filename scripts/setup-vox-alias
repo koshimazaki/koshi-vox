@@ -6,6 +6,7 @@ LIME='\033[38;5;154m'     # Bright lime green
 LIME_DIM='\033[38;5;148m' # Dimmer lime
 CYAN='\033[38;5;51m'      # Bright cyan
 ORANGE='\033[38;5;208m'   # Warning orange
+PINK='\033[38;5;198m'     # Bright pink
 RED='\033[38;5;196m'      # Bright red
 WHITE='\033[38;5;255m'    # Pure white
 GRAY='\033[38;5;240m'     # Subtle gray
@@ -16,13 +17,13 @@ SYMBOL_MIC='🎤'        # Microphone emoji
 SYMBOL_GEAR='⚙️'         # Gear emoji
 SYMBOL_CHECK='✓'         # Check mark
 SYMBOL_CROSS='✗'         # Cross mark
-SYMBOL_MAGIC='🪄'       # Magic wand emoji
+SYMBOL_MAGIC='🧪'       # Test tube emoji
 SYMBOL_SPARKLES='✨'      # Sparkles emoji
 SYMBOL_VOICE='🗣️'        # Speaking head emoji
 SYMBOL_WAVE='∿'          # Sine wave
 SYMBOL_INSTALL='📦'     # Package emoji
 SYMBOL_TERMINAL='💻'    # Computer emoji
-SYMBOL_ROCKET='🚀'      # Rocket emoji
+SYMBOL_ROCKET='📡'      # Antenna emoji
 
 # Utility function to check if running interactively
 is_interactive() {
@@ -255,12 +256,12 @@ fi
 # Animated title with lime theme and proper font switching
 set_title_font
 display "${LIME}╭─────────────────────────────────────────────────╮${NC}"
-display "${LIME}│${NC} $(get_symbol "voice")${LIME}  KOSHI-CODE VOX VOICE-TO-TEXT SETUP  $(get_symbol "voice")        ${LIME}│${NC}"
+display "${LIME}│${NC} $(get_symbol "voice")${LIME}  KOSHI-CODE VOX VOICE-TO-TEXT SETUP  $(get_symbol "voice")        ${LIME}  │${NC}"
 display "${LIME}╰─────────────────────────────────────────────────╯${NC}"
 set_body_font
 display ""
 animate_dots "$(get_symbol "install") Setting up '$ALIAS_NAME' alias for voice recording" 2
-display "${LIME}$(get_symbol "check") Found vox script at: ${WHITE}$VOX_SCRIPT${NC}"
+display "${LIME}$(get_symbol "check") Found vox script at: ${CYAN}$VOX_SCRIPT${NC}"
 
 # Create alias line - CLEAN version for file writing (no colors, no symbols)
 ALIAS_LINE="alias $ALIAS_NAME='$VOX_SCRIPT'"
@@ -273,14 +274,14 @@ fi
 
 # Check if custom alias already exists
 if grep -q "alias $ALIAS_NAME=" "$ZSHRC" 2>/dev/null; then
-    display "${ORANGE}${SYMBOL_MAGIC} '$ALIAS_NAME' alias already exists in .zshrc${NC}"
+    display "${PINK}${SYMBOL_MAGIC} '$ALIAS_NAME' alias already exists in .zshrc${NC}"
     display "${GRAY}Current alias:${NC}"
-    display "${WHITE}$(grep "alias $ALIAS_NAME=" "$ZSHRC")${NC}"
+    display "${CYAN}$(grep "alias $ALIAS_NAME=" "$ZSHRC")${NC}"
     display ""
     
     # Check if running in non-interactive environment
     if ! is_interactive; then
-        display "${ORANGE}${SYMBOL_MAGIC} Non-interactive mode: keeping existing alias${NC}"
+        display "${PINK}${SYMBOL_MAGIC} Non-interactive mode: keeping existing alias${NC}"
         reset_font
         exit 0
     fi
@@ -293,7 +294,7 @@ if grep -q "alias $ALIAS_NAME=" "$ZSHRC" 2>/dev/null; then
     
     # Handle timeout or no response
     if [ $read_result -gt 128 ]; then
-        display "${ORANGE}${SYMBOL_MAGIC} No response within 10 seconds, keeping existing alias${NC}"
+        display "${PINK}${SYMBOL_MAGIC} No response within 10 seconds, keeping existing alias${NC}"
         reset_font
         exit 0
     fi
@@ -308,7 +309,7 @@ if grep -q "alias $ALIAS_NAME=" "$ZSHRC" 2>/dev/null; then
         echo "alias vox-debug='$(dirname "$VOX_SCRIPT")/vox-debug'" >> "$ZSHRC"
         display "${LIME}${SYMBOL_CHECK} Updated '$ALIAS_NAME' alias${NC}"
     else
-        display "${ORANGE}${SYMBOL_MAGIC} Keeping existing alias${NC}"
+        display "${PINK}${SYMBOL_MAGIC} Keeping existing alias${NC}"
         reset_font
         exit 0
     fi
@@ -336,21 +337,21 @@ display ""
 
 set_title_font
 display "${LIME}╭─────────────────────────────────────────────────╮${NC}"
-display "${LIME}│${NC} ${SYMBOL_ROCKET}${LIME}     VOICE-TO-TEXT READY\!     ${SYMBOL_ROCKET} ${LIME}│${NC}"
+display "${LIME}│${NC} ${SYMBOL_ROCKET}${LIME}     VOICE-TO-TEXT READY!     ${SYMBOL_ROCKET} ${LIME}             │${NC}"
 display "${LIME}╰─────────────────────────────────────────────────╯${NC}"
 set_body_font
 display ""
 display "${CYAN}${SYMBOL_WAVE} Usage Guide:${NC}"
-display "  ${LIME}${SYMBOL_TERMINAL}${NC} Type: ${WHITE}$ALIAS_NAME${NC} to start recording"
-display "  ${LIME}${SYMBOL_BUG}${NC} Type: ${WHITE}vox-debug${NC} for troubleshooting"
+display "  ${LIME}${SYMBOL_TERMINAL}${NC} Type: ${LIME}$ALIAS_NAME${NC} to start recording"
+display "  ${LIME}${SYMBOL_BUG}${NC} Type: ${LIME}vox-debug${NC} for troubleshooting"
 display "  ${LIME}${SYMBOL_MIC}${NC} Speak your message"
-display "  ${LIME}${SYMBOL_GEAR}${NC} Press ${WHITE}SPACE${NC} or ${WHITE}ENTER${NC} to stop"
+display "  ${LIME}${SYMBOL_GEAR}${NC} Press ${LIME}SPACE${NC} or ${LIME}ENTER${NC} to stop"
 display "  ${LIME}${SYMBOL_CHECK}${NC} Text is automatically copied to clipboard"
-display "  ${LIME}${SYMBOL_SPARKLES}${NC} Paste into Claude Code with ${WHITE}Cmd+V${NC}"
+display "  ${LIME}${SYMBOL_SPARKLES}${NC} Paste into Claude Code with ${CYAN}Cmd+V${NC}"
 display ""
-display "${ORANGE}${SYMBOL_TERMINAL} Next Steps:${NC}"
+display "${PINK}${SYMBOL_TERMINAL} Next Steps:${NC}"
 display "  ${LIME}1.${NC} Reload shell: ${CYAN}source ~/.zshrc${NC}"
 display "  ${LIME}2.${NC} Or start a new terminal session"
-display "  ${LIME}3.${NC} Test with: ${WHITE}$ALIAS_NAME${NC}"
+display "  ${LIME}3.${NC} Test with: ${LIME}$ALIAS_NAME${NC}"
 display ""
 reset_font
