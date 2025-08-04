@@ -236,7 +236,7 @@ quick_record() {
     # Direct Python transcription (fastest for quick workflow)
     # Use base64 encoding to safely pass the file path to Python
     TEMP_FILE_B64=$(echo -n "$TEMP_FILE" | base64)
-    TEXT=$(KOSHI_VOX_TEMP_FILE="$TEMP_FILE_B64" python3 << 'EOF'
+    TEXT=$(KOSHI_VOX_TEMP_FILE="$TEMP_FILE_B64" "${KOSHI_VOX_PYTHON:-python3}" << 'EOF'
 import sys
 import base64
 import os

@@ -1,6 +1,6 @@
 {
   "name": "koshi-vox",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "description": "Voice-To-Text recorder with sound notifications - optimized for macOS",
   "bin": {
     "koshi-vox": "./bin/koshi-vox",
@@ -15,7 +15,8 @@
     "install": "chmod +x bin/koshi-vox bin/vox bin/vox-debug bin/vox-cleanup scripts/setup-vox-alias scripts/uninstall_koshi-vox scripts/install.js 2>/dev/null || true",
     "preuninstall": "echo \"\\n🗑️  Running vox uninstaller...\" && scripts/uninstall_koshi-vox 2>/dev/null || echo \"Manual cleanup: remove vox aliases from .zshrc\"",
     "koshi-install": "echo '🎤 Installing vox component to koshi-code...'",
-    "deps": "node scripts/install.js"
+    "deps": "node scripts/install.js",
+    "version": "node scripts/update-version.js"
   },
   "keywords": [
     "voice",

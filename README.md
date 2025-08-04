@@ -6,7 +6,7 @@
 ██║  ██╗╚██████╔╝███████║██║  ██║██║     ╚████╔╝ ╚██████╔╝██╔╝ ██╗
 ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝╚═╝      ╚═══╝   ╚═════╝ ╚═╝  ╚═╝
 ░░░█ Voice-To-Text Recorder for Terminal - optimized for MacOS █░░░
-░░ v1.2.5
+░░ v1.2.6
 ```
 Voice-To-Text Recorder for Terminal - optimized for MacOS and M series Macs for Claude Code workflow. 
 Record voice, get instant transcription, and paste directly into your coding sessions.
@@ -45,7 +45,12 @@ npm install -g .
 
 # Set up your voice alias
 setup-vox
+
+# To uninstall run
+
+uninstall-vox
 ```
+
 
 ## Structure 
 ```
@@ -109,7 +114,11 @@ vox-cleanup --all
 
 ### Change Your Alias
 ```bash
-setup-vox my-new-alias
+# Default alias (vox)
+setup-vox
+
+# Custom alias
+setup-vox myvoice
 ```
 
 ### Troubleshooting
@@ -130,6 +139,16 @@ vox-debug
 - **macOS**: Monterey+ recommended (M1-4 optimized)
 - **Linux**: Ubuntu 20.04+ or equivalent
 - **Microphone**: System microphone permissions required
+
+## Changelog
+
+### v1.2.6
+- **Fixed**: VS Code terminal support - now correctly uses virtual environment Python
+- **Fixed**: Python dependency resolution in isolated environments
+- **Added**: Version update script for maintaining version parity across files
+
+### v1.2.5
+- Initial public release
 
 ---
 

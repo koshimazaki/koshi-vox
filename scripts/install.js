@@ -1083,7 +1083,7 @@ async function main() {
 ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝╚═╝      ╚═══╝   ╚═════╝ ╚═╝  ╚═╝${colors.reset}`);
   
   console.log(`${colors.lime}░░░█ Voice-To-Text Recorder for Terminal with Python setup █░░░░░░${colors.reset}`);
-  console.log(`${colors.lime}░░░█ v1.2.5${colors.reset}`);
+  console.log(`${colors.lime}░░░█ v1.2.6${colors.reset}`);
   console.log(`${colors.lime}░░░░░░░░░░░█ https://github.com/koshimazaki/koshi-vox${colors.reset}`);
   console.log('');
   await animatedLoadingBar('⚡ Initializing enhanced installation', 2000);
