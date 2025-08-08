@@ -843,7 +843,6 @@ async function installNpmPackage() {
     const possiblePaths = [
       path.join(__dirname, '..'),
       path.join(__dirname, '../..'),
-      '/Users/radek/Documents/GIthub/ClaudeCodeSetup/koshi-vox/koshi-vox',
       process.cwd()
     ];
     
