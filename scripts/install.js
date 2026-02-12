@@ -489,41 +489,66 @@ async function setupVirtualEnvironment(pythonCmd) {
   }
 }
 
-// Download and cache Whisper base model
-async function downloadWhisperModel(venvPython) {
+// Download and cache ASR model (Parakeet MLX on Apple Silicon, Whisper fallback)
+async function downloadASRModel(venvPython) {
+  const isAppleSilicon = (os.platform() === 'darwin' && os.arch() === 'arm64');
+  const modelName = isAppleSilicon ? 'Parakeet MLX' : 'Whisper base';
+  const modelSize = isAppleSilicon ? '~1.2GB' : '~74MB';
+
   console.log('');
   console.log(`${colors.lime}╭─────────────────────────────────────────────────╮${colors.reset}`);
-  console.log(`${colors.lime}│${colors.reset}     ${colors.lime}DOWNLOADING WHISPER BASE MODEL${colors.reset}              ${colors.lime}│${colors.reset}`);
+  console.log(`${colors.lime}│${colors.reset}     ${colors.lime}DOWNLOADING ${modelName.toUpperCase()} MODEL${colors.reset}${' '.repeat(Math.max(0, 20 - modelName.length))}${colors.lime}│${colors.reset}`);
   console.log(`${colors.lime}╰─────────────────────────────────────────────────╯${colors.reset}`);
   console.log('');
-  
-  console.log(`${colors.gray}Pre-downloading base model (~74MB) for instant voice recording...${colors.reset}`);
+
+  console.log(`${colors.gray}Pre-downloading ${modelName} model (${modelSize}) for instant voice recording...${colors.reset}`);
   console.log('');
-  
+
   // Create progress bar with ▰▱ blocks
   const progressWidth = 40;
   let currentProgress = 0;
-  
+
   const updateProgress = (percent) => {
     const filled = Math.floor((percent / 100) * progressWidth);
     const empty = progressWidth - filled;
     const bar = '▰'.repeat(filled) + '▱'.repeat(empty);
-    
+
     // Color coding: lime for progress, gray for empty
     process.stdout.write(`\r  ${colors.lime}${bar.substring(0, filled)}${colors.gray}${bar.substring(filled)}${colors.reset} ${colors.lime}${percent}%${colors.reset}`);
   };
-  
+
   // Start progress animation
   const progressInterval = setInterval(() => {
     currentProgress = Math.min(currentProgress + Math.random() * 15, 95);
     updateProgress(Math.floor(currentProgress));
   }, 500);
-  
+
   try {
-    // Python script to download the model
-    const downloadScript = `
+    let downloadScript;
+
+    if (isAppleSilicon) {
+      // Pre-download Parakeet MLX model (Apple Silicon)
+      downloadScript = `
 import sys
-import os
+try:
+    from parakeet_mlx import from_pretrained
+    print("Downloading Parakeet MLX model...")
+    model = from_pretrained("mlx-community/parakeet-tdt-0.6b-v2")
+    print("Parakeet MLX model downloaded and cached!")
+except Exception as e:
+    print(f"Parakeet download failed ({e}), trying Whisper fallback...")
+    try:
+        from faster_whisper import WhisperModel
+        model = WhisperModel("base", device="cpu", compute_type="int8", cpu_threads=8)
+        print("Whisper base model downloaded and cached!")
+    except Exception as e2:
+        print(f"Error: {e2}")
+        sys.exit(1)
+`;
+    } else {
+      // Pre-download Whisper base model (non-Apple Silicon)
+      downloadScript = `
+import sys
 try:
     from faster_whisper import WhisperModel
     print("Downloading Whisper base model...")
@@ -533,26 +558,28 @@ except Exception as e:
     print(f"Error: {e}")
     sys.exit(1)
 `;
-    
-    // Execute the download  
-    await execAsync(`"${venvPython}" -c '${downloadScript}'`, { stdio: 'pipe' });
-    
+    }
+
+    // Execute the download
+    await execAsync(`"${venvPython}" -c '${downloadScript}'`, { stdio: 'pipe', timeout: 300000 });
+
     // Complete progress
     clearInterval(progressInterval);
     updateProgress(100);
     console.log('');
     console.log('');
-    console.log(`${colors.lime}${symbols.check} Whisper base model downloaded and cached!${colors.reset}`);
+    console.log(`${colors.lime}${symbols.check} ${modelName} model downloaded and cached!${colors.reset}`);
     console.log(`${colors.gray}Voice recording will be instant on first use${colors.reset}`);
-    
+
     // Log the model installation
-    installLog.setComponent('whisperModel', {
-      model: 'base',
-      size: '74MB',
+    installLog.setComponent('asrModel', {
+      model: isAppleSilicon ? 'parakeet-tdt-0.6b-v2' : 'whisper-base',
+      engine: isAppleSilicon ? 'parakeet-mlx' : 'faster-whisper',
+      size: modelSize,
       downloaded: true,
       installedAt: new Date().toISOString()
     });
-    
+
   } catch (error) {
     clearInterval(progressInterval);
     console.log('');
@@ -628,38 +655,53 @@ async function installFonts() {
 class PackageInstaller {
   constructor(venvPython) {
     this.venvPython = venvPython;
-    this.packages = [
-      { 
-        name: 'faster-whisper', 
-        icon: '🧠', 
-        desc: 'AI-optimized speech recognition',
+    // Detect Apple Silicon for parakeet-mlx support
+    const isAppleSilicon = (os.platform() === 'darwin' && os.arch() === 'arm64');
+
+    this.packages = [];
+
+    // Primary engine: Parakeet MLX on Apple Silicon, faster-whisper as fallback
+    if (isAppleSilicon) {
+      this.packages.push({
+        name: 'parakeet-mlx',
+        icon: '🦜',
+        desc: 'Parakeet MLX - Apple Silicon native ASR (6% WER)',
+        size: '~1.2 GB model download on first use'
+      });
+    }
+
+    this.packages.push(
+      {
+        name: 'faster-whisper',
+        icon: '🧠',
+        desc: isAppleSilicon ? 'Whisper fallback engine' : 'AI-optimized speech recognition',
         size: 'Large - includes AI models'
       },
-      { 
-        name: 'soundfile', 
-        icon: '🎵', 
+      {
+        name: 'soundfile',
+        icon: '🎵',
         desc: 'Audio file handling',
         size: 'Lightweight'
       },
-      { 
-        name: 'librosa', 
-        icon: '🎼', 
+      {
+        name: 'librosa',
+        icon: '🎼',
         desc: 'Advanced audio processing',
         size: 'Medium - audio analysis tools'
       },
-      { 
-        name: 'fastapi', 
-        icon: '⚡', 
+      {
+        name: 'fastapi',
+        icon: '⚡',
         desc: 'Modern web API framework',
         size: 'Lightweight'
       },
-      { 
-        name: 'uvicorn', 
-        icon: '🚀', 
+      {
+        name: 'uvicorn',
+        icon: '🚀',
         desc: 'ASGI server for FastAPI',
         size: 'Lightweight'
       }
-    ];
+    );
     this.failed = [];
     this.installed = [];
   }
@@ -1121,8 +1163,8 @@ async function main() {
       console.log(`${colors.orange}Some dependencies failed to install${colors.reset}`);
     }
     
-    // Pre-download Whisper base model
-    await downloadWhisperModel(venvPython);
+    // Pre-download ASR model (Parakeet MLX on Apple Silicon, Whisper fallback)
+    await downloadASRModel(venvPython);
     
     // Update shell configuration
     await updateShellConfig();

@@ -13,19 +13,37 @@ echo -e "${BLUE}🔍 VOX DEBUG MODE${NC}"
 echo -e "${BLUE}📦 Checking Python dependencies...${NC}"
 python3 -c "
 import sys
+import platform
 print(f'Python version: {sys.version}')
+print(f'Platform: {platform.system()} {platform.machine()}')
+
+is_apple_silicon = (platform.system() == 'Darwin' and platform.machine() == 'arm64')
+if is_apple_silicon:
+    print('🍎 Apple Silicon detected - Parakeet MLX is primary engine')
+else:
+    print('💻 Non-Apple Silicon - faster-whisper is primary engine')
+
+try:
+    import parakeet_mlx
+    print(f'✅ parakeet-mlx installed (primary on Apple Silicon)')
+except ImportError as e:
+    if is_apple_silicon:
+        print(f'⚠️  parakeet-mlx not found: {e} (install with: pip install parakeet-mlx)')
+    else:
+        print(f'ℹ️  parakeet-mlx not available (Apple Silicon only)')
+
 try:
     import faster_whisper
     print(f'✅ faster-whisper version: {faster_whisper.__version__}')
 except ImportError as e:
     print(f'❌ faster-whisper not found: {e}')
-    
+
 try:
     import soundfile
     print(f'✅ soundfile version: {soundfile.__version__}')
 except ImportError as e:
     print(f'❌ soundfile not found: {e}')
-    
+
 try:
     import numpy
     print(f'✅ numpy version: {numpy.__version__}')
@@ -89,6 +107,8 @@ import sys
 import os
 import traceback
 import base64
+import platform
+import time
 
 print("🔍 Starting Python transcription debug...")
 
@@ -98,91 +118,126 @@ try:
     if not temp_file_b64:
         print("❌ No audio file specified in environment")
         sys.exit(1)
-    
+
     temp_file = base64.b64decode(temp_file_b64.encode()).decode('utf-8')
-    
+
     # Validate file path (must be in /tmp and exist)
     if not temp_file.startswith('/tmp/'):
         print("❌ Invalid audio file path - not in /tmp")
         sys.exit(1)
-    
-    print("📦 Importing modules...")
-    from faster_whisper import WhisperModel
-    import soundfile as sf
-    import numpy as np
-    print("✅ All modules imported successfully")
-    
-    print("🔧 Initializing Whisper model...")
-    model = WhisperModel("base", device="cpu", compute_type="int8", cpu_threads=8)
-    print("✅ Model initialized successfully")
-    
-    print(f"📂 Loading audio file: {temp_file}")
+
+    is_apple_silicon = (platform.system() == "Darwin" and platform.machine() == "arm64")
+    parakeet_available = False
+    whisper_available = False
+
+    # Check Parakeet MLX availability
+    if is_apple_silicon:
+        try:
+            import parakeet_mlx
+            parakeet_available = True
+            print("✅ parakeet-mlx available (primary engine)")
+        except ImportError:
+            print("⚠️  parakeet-mlx not installed (will use whisper fallback)")
+
+    # Check faster-whisper availability
+    try:
+        from faster_whisper import WhisperModel
+        import soundfile as sf
+        import numpy as np
+        whisper_available = True
+        print("✅ faster-whisper available" + (" (fallback)" if parakeet_available else " (primary)"))
+    except ImportError as e:
+        print(f"{'⚠️' if parakeet_available else '❌'} faster-whisper not found: {e}")
+
+    if not parakeet_available and not whisper_available:
+        print("❌ No transcription engine available!")
+        sys.exit(1)
+
+    print(f"\n📂 Loading audio file: {temp_file}")
     if not os.path.exists(temp_file):
         print("❌ Audio file doesn't exist!")
         sys.exit(1)
-        
+
     file_size = os.path.getsize(temp_file)
     print(f"📊 File size: {file_size} bytes")
-    
-    try:
-        audio, sr = sf.read(temp_file)
-        # Ensure float32 for ONNX compatibility
-        audio = np.array(audio, dtype=np.float32)
-        print(f"✅ Audio loaded: {len(audio)} samples at {sr}Hz")
-        print(f"📊 Audio duration: {len(audio)/sr:.2f} seconds")
-        print(f"📊 Audio range: {np.min(audio):.4f} to {np.max(audio):.4f}")
-        
-        if len(audio) == 0:
-            print("❌ Audio array is empty!")
-            sys.exit(1)
-            
-    except Exception as e:
-        print(f"❌ Failed to load audio: {e}")
-        print("🔍 Traceback:")
-        traceback.print_exc()
-        sys.exit(1)
-    
-    print("🎯 Starting transcription...")
-    try:
-        segments, info = model.transcribe(
-            audio, 
-            beam_size=1,
-            language="en",
-            condition_on_previous_text=False,
-            vad_filter=True,
-            vad_parameters=dict(min_silence_duration_ms=300)
-        )
-        
-        print(f"✅ Transcription completed")
-        print(f"📊 Language: {info.language}")
-        print(f"📊 Language probability: {info.language_probability:.2f}")
-        
-        text_segments = list(segments)
-        print(f"📊 Number of segments: {len(text_segments)}")
-        
-        for i, segment in enumerate(text_segments):
-            print(f"🎵 Segment {i+1}: '{segment.text}' ({segment.start:.2f}s - {segment.end:.2f}s)")
-        
-        final_text = " ".join([s.text for s in text_segments]).strip()
-        
-        if not final_text:
-            print("⚠️  No text was transcribed (empty result)")
-        else:
-            print(f"✅ Final transcription: '{final_text}'")
-            
-    except Exception as e:
-        print(f"❌ Transcription failed: {e}")
-        print("🔍 Traceback:")
-        traceback.print_exc()
-        sys.exit(1)
-        
+
+    # Try Parakeet MLX first on Apple Silicon
+    if parakeet_available:
+        print("\n🦜 Testing Parakeet MLX transcription...")
+        try:
+            from parakeet_mlx import from_pretrained
+            start = time.time()
+            print("🔧 Loading Parakeet model (first load downloads ~1.2GB)...")
+            model = from_pretrained("mlx-community/parakeet-tdt-0.6b-v2")
+            load_time = time.time() - start
+            print(f"✅ Model loaded in {load_time:.2f}s")
+
+            start = time.time()
+            result = model.transcribe(temp_file)
+            transcribe_time = time.time() - start
+            print(f"✅ Parakeet transcription completed in {transcribe_time:.2f}s")
+            print(f"✅ Final transcription: '{result.text}'")
+
+            if hasattr(result, 'sentences'):
+                for i, sent in enumerate(result.sentences):
+                    print(f"🎵 Sentence {i+1}: '{sent.text}' ({sent.start:.2f}s - {sent.end:.2f}s)")
+        except Exception as e:
+            print(f"❌ Parakeet transcription failed: {e}")
+            traceback.print_exc()
+
+    # Also test faster-whisper for comparison
+    if whisper_available:
+        print("\n🧠 Testing faster-whisper transcription...")
+        try:
+            audio, sr = sf.read(temp_file)
+            audio = np.array(audio, dtype=np.float32)
+            print(f"✅ Audio loaded: {len(audio)} samples at {sr}Hz")
+            print(f"📊 Audio duration: {len(audio)/sr:.2f} seconds")
+            print(f"📊 Audio range: {np.min(audio):.4f} to {np.max(audio):.4f}")
+
+            if len(audio) == 0:
+                print("❌ Audio array is empty!")
+                sys.exit(1)
+
+            start = time.time()
+            model = WhisperModel("base", device="cpu", compute_type="int8", cpu_threads=8)
+            load_time = time.time() - start
+            print(f"✅ Whisper model loaded in {load_time:.2f}s")
+
+            start = time.time()
+            segments, info = model.transcribe(
+                audio,
+                beam_size=1,
+                language="en",
+                condition_on_previous_text=False,
+                vad_filter=True,
+                vad_parameters=dict(min_silence_duration_ms=300)
+            )
+            text_segments = list(segments)
+            transcribe_time = time.time() - start
+
+            print(f"✅ Whisper transcription completed in {transcribe_time:.2f}s")
+            print(f"📊 Language: {info.language} (prob: {info.language_probability:.2f})")
+            print(f"📊 Segments: {len(text_segments)}")
+
+            for i, segment in enumerate(text_segments):
+                print(f"🎵 Segment {i+1}: '{segment.text}' ({segment.start:.2f}s - {segment.end:.2f}s)")
+
+            final_text = " ".join([s.text for s in text_segments]).strip()
+            if not final_text:
+                print("⚠️  No text was transcribed (empty result)")
+            else:
+                print(f"✅ Final transcription: '{final_text}'")
+        except Exception as e:
+            print(f"❌ Whisper transcription failed: {e}")
+            traceback.print_exc()
+
 except Exception as e:
     print(f"❌ Critical error: {e}")
-    print("🔍 Traceback:")
     traceback.print_exc()
     sys.exit(1)
 
-print("✅ Debug completed successfully!")
+print("\n✅ Debug completed successfully!")
 EOF
 
 echo ""

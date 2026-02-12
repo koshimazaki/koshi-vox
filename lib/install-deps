@@ -67,9 +67,22 @@ fi
 echo -e "${CYAN}${SYMBOL_GEAR} Installing M1-optimized packages...${NC}"
 echo
 
+# Detect Apple Silicon for Parakeet MLX support
+IS_APPLE_SILICON=false
+if [[ "$OSTYPE" == "darwin"* ]] && [[ "$(uname -m)" == "arm64" ]]; then
+    IS_APPLE_SILICON=true
+fi
+
 # Core dependencies
-PACKAGES=(
-    "faster-whisper:${SYMBOL_BRAIN}:M1-optimized speech recognition"
+PACKAGES=()
+
+# Primary engine: Parakeet MLX on Apple Silicon
+if [[ "$IS_APPLE_SILICON" == "true" ]]; then
+    PACKAGES+=("parakeet-mlx:${SYMBOL_BRAIN}:Parakeet MLX - Apple Silicon native ASR (6% WER)")
+fi
+
+PACKAGES+=(
+    "faster-whisper:${SYMBOL_BRAIN}:Whisper speech recognition (fallback engine)"
     "soundfile:${SYMBOL_MIC}:Audio file handling"
     "librosa:${SYMBOL_MIC}:Advanced audio processing"
     "fastapi:${SYMBOL_API}:Modern web API framework"

@@ -129,12 +129,12 @@ animate_recording_levels() {
         local filled=$(printf '▰%.0s' $(seq 1 $level))
         local empty=$(printf '▱%.0s' $(seq 1 $((width - level))))
         
-        # Color coding: green for low, yellow for medium, red for high
+        # Color coding: green for low, pink for medium, red for high
         local color="${LIME}"
-        if [ $level -gt 12 ]; then
-            color="${PINK}"
-        elif [ $level -gt 16 ]; then
+        if [ $level -gt 16 ]; then
             color="${RED}"
+        elif [ $level -gt 12 ]; then
+            color="${PINK}"
         fi
         
         # Update both the timer line and level bar
@@ -234,66 +234,90 @@ quick_record() {
     animate_transcribing 4
     
     # Direct Python transcription (fastest for quick workflow)
+    # Uses Parakeet MLX on Apple Silicon, falls back to faster-whisper
     # Use base64 encoding to safely pass the file path to Python
     TEMP_FILE_B64=$(echo -n "$TEMP_FILE" | base64)
     TEXT=$(KOSHI_VOX_TEMP_FILE="$TEMP_FILE_B64" "${KOSHI_VOX_PYTHON:-python3}" << 'EOF'
 import sys
 import base64
 import os
+import platform
 
-try:
-    from faster_whisper import WhisperModel
-    import soundfile as sf
-except ImportError:
-    print("ERROR: Missing dependencies")
-    sys.exit(1)
-
-try:
-    # Safely decode the file path
+def get_audio_path():
+    """Decode and validate the audio file path."""
     temp_file_b64 = os.environ.get('KOSHI_VOX_TEMP_FILE', '')
     if not temp_file_b64:
         print("ERROR: No audio file specified")
         sys.exit(1)
-    
     temp_file = base64.b64decode(temp_file_b64.encode()).decode('utf-8')
-    
-    # Validate file path (must be in /tmp and exist)
     if not temp_file.startswith('/tmp/') or not os.path.exists(temp_file):
         print("ERROR: Invalid audio file path")
         sys.exit(1)
-    
-    # Quick model load (cached after first use)
-    model = WhisperModel("base", device="cpu", compute_type="int8", cpu_threads=8)
-    
-    # Load and transcribe
-    audio, sr = sf.read(temp_file)
-    
-    # Ensure audio is float32 for ONNX compatibility
+    return temp_file
+
+def transcribe_parakeet(temp_file):
+    """Transcribe using Parakeet MLX (Apple Silicon native, best accuracy)."""
+    from parakeet_mlx import from_pretrained
+    model = from_pretrained("mlx-community/parakeet-tdt-0.6b-v2")
+    result = model.transcribe(temp_file)
+    return result.text.strip()
+
+def transcribe_whisper(temp_file):
+    """Transcribe using faster-whisper (CPU fallback)."""
+    from faster_whisper import WhisperModel
+    import soundfile as sf
     import numpy as np
+
+    model = WhisperModel("base", device="cpu", compute_type="int8", cpu_threads=8)
+    audio, sr = sf.read(temp_file)
     audio = np.array(audio, dtype=np.float32)
-    
-    # Ensure audio is in the right shape (1D array)
     if len(audio.shape) > 1:
         audio = audio.mean(axis=1)
-    
-    # Check if audio has actual content
     max_amplitude = np.max(np.abs(audio))
     if max_amplitude < 1e-6:
         print("ERROR: Audio appears to be silence - check microphone permissions")
         sys.exit(1)
-    
     segments, info = model.transcribe(
-        audio, 
+        audio,
         beam_size=1,
         language="en",
         condition_on_previous_text=False,
         vad_filter=True,
         vad_parameters=dict(min_silence_duration_ms=300)
     )
-    
-    text = " ".join([s.text for s in segments]).strip()
+    return " ".join([s.text for s in segments]).strip()
+
+try:
+    temp_file = get_audio_path()
+    text = None
+    is_apple_silicon = (platform.system() == "Darwin" and platform.machine() == "arm64")
+
+    # Try Parakeet MLX first on Apple Silicon
+    if is_apple_silicon:
+        try:
+            text = transcribe_parakeet(temp_file)
+        except ImportError:
+            pass  # parakeet-mlx not installed, fall back
+        except Exception as e:
+            print(f"WARN: Parakeet failed ({e}), falling back to Whisper", file=sys.stderr)
+
+    # Fallback to faster-whisper
+    if not text:
+        try:
+            text = transcribe_whisper(temp_file)
+        except ImportError:
+            print("ERROR: Missing dependencies. Install parakeet-mlx or faster-whisper")
+            sys.exit(1)
+        except Exception as e:
+            print(f"ERROR: Transcription engine failed: {e}")
+            sys.exit(1)
+
+    if not text:
+        print("ERROR: Transcription produced no text")
+        sys.exit(1)
+
     print(text)
-    
+
 except Exception as e:
     print(f"ERROR: {e}")
     sys.exit(1)
@@ -304,7 +328,12 @@ EOF
     if [[ "$TEXT" == ERROR:* ]] || [[ -z "$TEXT" ]]; then
         echo -e "${RED}${SYMBOL_CROSS} Transcription failed${NC}"
         if [[ "$TEXT" == *"Missing dependencies"* ]]; then
-            echo -e "${ORANGE}${SYMBOL_GEAR} Install with: ${CYAN}pip install faster-whisper soundfile${NC}"
+            if [[ "$(uname -m)" == "arm64" ]]; then
+                echo -e "${ORANGE}${SYMBOL_GEAR} Install with: ${CYAN}pip install parakeet-mlx${NC} (recommended for Apple Silicon)"
+                echo -e "${ORANGE}${SYMBOL_GEAR} Or fallback: ${CYAN}pip install faster-whisper soundfile${NC}"
+            else
+                echo -e "${ORANGE}${SYMBOL_GEAR} Install with: ${CYAN}pip install faster-whisper soundfile${NC}"
+            fi
         elif [[ "$TEXT" == *"silence"* ]] || [[ "$TEXT" == *"microphone"* ]]; then
             echo -e "${ORANGE}${SYMBOL_MIC} Microphone permission issue:${NC}"
             echo -e "${GRAY}   Go to System Settings → Privacy & Security → Microphone${NC}"
@@ -379,7 +408,11 @@ if check_quick_deps; then
     echo -e "${LIME}░░███ Voice recording complete! ███░░${NC}"
     reset_font
 else
-    echo -e "${PINK}${SYMBOL_GEAR} Setup required. Run: ${CYAN}pip install faster-whisper soundfile${NC}"
+    if [[ "$(uname -m)" == "arm64" ]]; then
+        echo -e "${PINK}${SYMBOL_GEAR} Setup required. Run: ${CYAN}pip install parakeet-mlx${NC} (or: pip install faster-whisper soundfile)"
+    else
+        echo -e "${PINK}${SYMBOL_GEAR} Setup required. Run: ${CYAN}pip install faster-whisper soundfile${NC}"
+    fi
     reset_font
     exit 1
 fi
