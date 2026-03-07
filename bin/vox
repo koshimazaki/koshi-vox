@@ -1,6 +1,26 @@
 #!/bin/bash
 # Quick Voice Recorder - Press SPACE or ENTER to stop
 # Optimized for M1 and instant workflow
+# Usage: vox [--pl | --lang XX]
+
+# Language selection (default: English with Parakeet MLX)
+VOX_LANG="en"
+VOX_ENGINE="auto"  # auto = Parakeet first, Whisper fallback
+
+for arg in "$@"; do
+    case "$arg" in
+        --pl)       VOX_LANG="pl"; VOX_ENGINE="whisper" ;;
+        --lang)     ;; # next arg handled below
+        --lang=*)   VOX_LANG="${arg#--lang=}"; VOX_ENGINE="whisper" ;;
+        *)
+            # Handle --lang XX (two-arg form)
+            if [[ "$prev_arg" == "--lang" ]]; then
+                VOX_LANG="$arg"; VOX_ENGINE="whisper"
+            fi
+            ;;
+    esac
+    prev_arg="$arg"
+done
 
 # Lime-based color scheme (following UX design principles)
 LIME='\033[38;5;154m'     # Bright lime green
@@ -183,13 +203,23 @@ quick_record() {
     echo -e "${LIME}│${NC} ${SYMBOL_MIC}${LIME}   VOX VOICE-TO-TEXT RECORDER   ${SYMBOL_MIC} ${LIME}│${NC}"
     echo -e "${LIME}╰──────────────────────────────────────╯${NC}"
     set_body_font
+    if [[ "$VOX_LANG" != "en" ]]; then
+        if [[ -n "$ELEVENLABS_API_KEY" ]]; then
+            echo -e "${CYAN}${SYMBOL_GEAR} Language: ${WHITE}${VOX_LANG}${CYAN} (ElevenLabs Scribe v2)${NC}"
+        else
+            echo -e "${CYAN}${SYMBOL_GEAR} Language: ${WHITE}${VOX_LANG}${CYAN} (Whisper offline)${NC}"
+            echo -e "${GRAY}   Tip: set ELEVENLABS_API_KEY for ~5% WER cloud transcription${NC}"
+        fi
+    fi
     echo
-    
+
     echo -e "${CYAN}${SYMBOL_RECORD} Starting recording...${NC}"
     animate_pulse "░░██" "Press SPACE or ENTER when done speaking" 2
     
-    # Create secure temp file with mktemp
-    TEMP_FILE=$(mktemp /tmp/quick_rec_XXXXXX.wav)
+    # Create secure temp file with mktemp (no suffix after XXXXXX — macOS BSD mktemp doesn't support it)
+    TEMP_FILE=$(mktemp /tmp/quick_rec_XXXXXX)
+    mv "$TEMP_FILE" "${TEMP_FILE}.wav"
+    TEMP_FILE="${TEMP_FILE}.wav"
     
     # Start recording in background (suppress sox output to avoid interference)
     if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -237,7 +267,8 @@ quick_record() {
     # Uses Parakeet MLX on Apple Silicon, falls back to faster-whisper
     # Use base64 encoding to safely pass the file path to Python
     TEMP_FILE_B64=$(echo -n "$TEMP_FILE" | base64)
-    TEXT=$(KOSHI_VOX_TEMP_FILE="$TEMP_FILE_B64" "${KOSHI_VOX_PYTHON:-python3}" << 'EOF'
+    VOX_STDERR=$(mktemp /tmp/vox_stderr_XXXXXX)
+    TEXT=$(KOSHI_VOX_TEMP_FILE="$TEMP_FILE_B64" KOSHI_VOX_LANG="$VOX_LANG" KOSHI_VOX_ENGINE="$VOX_ENGINE" "${KOSHI_VOX_PYTHON:-python3}" 2>"$VOX_STDERR" << 'EOF'
 import sys
 import base64
 import os
@@ -256,14 +287,70 @@ def get_audio_path():
     return temp_file
 
 def transcribe_parakeet(temp_file):
-    """Transcribe using Parakeet MLX (Apple Silicon native, best accuracy)."""
+    """Transcribe using Parakeet MLX (Apple Silicon native, English only)."""
     from parakeet_mlx import from_pretrained
     model = from_pretrained("mlx-community/parakeet-tdt-0.6b-v2")
     result = model.transcribe(temp_file)
     return result.text.strip()
 
-def transcribe_whisper(temp_file):
-    """Transcribe using faster-whisper (CPU fallback)."""
+def transcribe_elevenlabs(temp_file, lang="pol"):
+    """Transcribe using ElevenLabs Scribe v2 (cloud, best multilingual)."""
+    import json
+    import urllib.request
+    import mimetypes
+
+    api_key = os.environ.get('ELEVENLABS_API_KEY', '')
+    if not api_key:
+        return None
+
+    # Map short codes to ElevenLabs language codes
+    lang_map = {"pl": "pol", "en": "eng", "de": "deu", "fr": "fra",
+                "es": "spa", "it": "ita", "pt": "por", "nl": "nld",
+                "ja": "jpn", "zh": "zho", "ko": "kor", "ru": "rus",
+                "uk": "ukr", "cs": "ces", "sv": "swe", "da": "dan"}
+    el_lang = lang_map.get(lang, lang)
+
+    # Build multipart form data
+    boundary = "----KoshiVoxBoundary"
+    body = b""
+
+    # File field
+    with open(temp_file, "rb") as f:
+        file_data = f.read()
+    body += f"--{boundary}\r\n".encode()
+    body += f'Content-Disposition: form-data; name="file"; filename="audio.wav"\r\n'.encode()
+    body += b"Content-Type: audio/wav\r\n\r\n"
+    body += file_data
+    body += b"\r\n"
+
+    # Model field
+    body += f"--{boundary}\r\n".encode()
+    body += b'Content-Disposition: form-data; name="model_id"\r\n\r\n'
+    body += b"scribe_v2\r\n"
+
+    # Language field
+    body += f"--{boundary}\r\n".encode()
+    body += b'Content-Disposition: form-data; name="language_code"\r\n\r\n'
+    body += el_lang.encode() + b"\r\n"
+
+    body += f"--{boundary}--\r\n".encode()
+
+    req = urllib.request.Request(
+        "https://api.elevenlabs.io/v1/speech-to-text",
+        data=body,
+        headers={
+            "xi-api-key": api_key,
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+        },
+        method="POST"
+    )
+
+    resp = urllib.request.urlopen(req, timeout=30)
+    result = json.loads(resp.read().decode())
+    return result.get("text", "").strip()
+
+def transcribe_whisper(temp_file, lang="en"):
+    """Transcribe using faster-whisper (offline multilingual fallback)."""
     from faster_whisper import WhisperModel
     import soundfile as sf
     import numpy as np
@@ -280,7 +367,7 @@ def transcribe_whisper(temp_file):
     segments, info = model.transcribe(
         audio,
         beam_size=1,
-        language="en",
+        language=lang,
         condition_on_previous_text=False,
         vad_filter=True,
         vad_parameters=dict(min_silence_duration_ms=300)
@@ -290,21 +377,38 @@ def transcribe_whisper(temp_file):
 try:
     temp_file = get_audio_path()
     text = None
+    lang = os.environ.get('KOSHI_VOX_LANG', 'en')
+    engine = os.environ.get('KOSHI_VOX_ENGINE', 'auto')
     is_apple_silicon = (platform.system() == "Darwin" and platform.machine() == "arm64")
 
-    # Try Parakeet MLX first on Apple Silicon
-    if is_apple_silicon:
+    used_engine = None
+
+    # Try Parakeet MLX first on Apple Silicon (English only)
+    if is_apple_silicon and engine == "auto" and lang == "en":
         try:
             text = transcribe_parakeet(temp_file)
+            if text:
+                used_engine = "parakeet-mlx"
         except ImportError:
             pass  # parakeet-mlx not installed, fall back
         except Exception as e:
             print(f"WARN: Parakeet failed ({e}), falling back to Whisper", file=sys.stderr)
 
-    # Fallback to faster-whisper
+    # Try ElevenLabs cloud for non-English (or if Parakeet unavailable)
+    if not text and engine == "whisper":
+        try:
+            text = transcribe_elevenlabs(temp_file, lang=lang)
+            if text:
+                used_engine = "elevenlabs"
+        except Exception as e:
+            print(f"WARN: ElevenLabs failed ({e}), falling back to Whisper", file=sys.stderr)
+
+    # Fallback to local faster-whisper
     if not text:
         try:
-            text = transcribe_whisper(temp_file)
+            text = transcribe_whisper(temp_file, lang=lang)
+            if text:
+                used_engine = "whisper"
         except ImportError:
             print("ERROR: Missing dependencies. Install parakeet-mlx or faster-whisper")
             sys.exit(1)
@@ -316,6 +420,9 @@ try:
         print("ERROR: Transcription produced no text")
         sys.exit(1)
 
+    # Output engine tag to stderr, text to stdout
+    if used_engine:
+        print(f"[engine:{used_engine}]", file=sys.stderr)
     print(text)
 
 except Exception as e:
@@ -348,8 +455,19 @@ EOF
     # Play notification sound when transcription is complete
     # play_notification_sound
     
+    # Detect which engine was used (from captured stderr)
+    ENGINE_LABEL="whisper"
+    if grep -q "engine:parakeet-mlx" "$VOX_STDERR" 2>/dev/null; then
+        ENGINE_LABEL="nvidia parakeet-mlx"
+    elif grep -q "engine:elevenlabs" "$VOX_STDERR" 2>/dev/null; then
+        ENGINE_LABEL="elevenlabs"
+    fi
+    # Print any warnings from stderr (skip engine tags)
+    grep -v "^\[engine:" "$VOX_STDERR" 2>/dev/null | grep -v "^$" >&2
+    rm -f "$VOX_STDERR"
+
     echo
-    echo -e "${LIME}${SYMBOL_TEXT} Transcribed text:${NC}"
+    echo -e "${LIME}${SYMBOL_TEXT} Transcribed text ${GRAY}(${ENGINE_LABEL})${LIME}:${NC}"
     echo -e "${WHITE}\"$TEXT\"${NC}"
     
     # Copy to clipboard with animation

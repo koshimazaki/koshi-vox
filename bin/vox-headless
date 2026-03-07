@@ -1,0 +1,142 @@
+#!/bin/bash
+# Non-interactive Voice Recorder for Node.js integration
+# Records for a specified duration or until SIGINT
+
+# Get recording duration from argument (default 30 seconds)
+DURATION="${1:-30}"
+
+# Colors for debug output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m' # No Color
+
+# Create secure temp file (no suffix after XXXXXX — macOS BSD mktemp doesn't support it)
+TEMP_FILE=$(mktemp /tmp/vox_rec_XXXXXX)
+mv "$TEMP_FILE" "${TEMP_FILE}.wav"
+TEMP_FILE="${TEMP_FILE}.wav"
+RECORDING_PID=""
+
+# Cleanup function
+cleanup() {
+    rm -f "$TEMP_FILE"
+    exit 0
+}
+
+# Handle interrupt - stop recording and transcribe
+handle_interrupt() {
+    if [[ -n "$RECORDING_PID" ]]; then
+        kill $RECORDING_PID 2>/dev/null
+        wait $RECORDING_PID 2>/dev/null
+        transcribe_and_output
+    fi
+    cleanup
+}
+
+# Trap signals for cleanup
+trap cleanup EXIT
+trap handle_interrupt INT TERM
+
+# Function to transcribe and output
+transcribe_and_output() {
+    # Check if recording succeeded
+    if [[ ! -f "$TEMP_FILE" ]] || [[ ! -s "$TEMP_FILE" ]]; then
+        echo "ERROR: Recording failed" >&2
+        return 1
+    fi
+
+    echo "Recording stopped. Transcribing..." >&2
+
+    # Transcribe using Python
+TRANSCRIPTION=$(python3 << EOF
+import sys
+import os
+import warnings
+warnings.filterwarnings("ignore")
+
+try:
+    from faster_whisper import WhisperModel
+    import soundfile as sf
+    import numpy as np
+except ImportError:
+    print("ERROR: Missing dependencies. Install with: pip install faster-whisper soundfile", file=sys.stderr)
+    sys.exit(1)
+
+try:
+    # Load model
+    model = WhisperModel("base", device="cpu", compute_type="int8", cpu_threads=8)
+    
+    # Load audio
+    audio, sr = sf.read("$TEMP_FILE")
+    
+    # Ensure audio is float32
+    audio = np.array(audio, dtype=np.float32)
+    
+    # Ensure audio is 1D
+    if len(audio.shape) > 1:
+        audio = audio.mean(axis=1)
+    
+    # Check for silence
+    max_amplitude = np.max(np.abs(audio))
+    if max_amplitude < 1e-6:
+        print("ERROR: No audio detected (silence)", file=sys.stderr)
+        sys.exit(1)
+    
+    # Transcribe with VAD filtering for cleaner output
+    segments, info = model.transcribe(
+        audio,
+        beam_size=1,
+        language="en",
+        condition_on_previous_text=False,
+        vad_filter=True,
+        vad_parameters=dict(min_silence_duration_ms=300)
+    )
+    
+    # Collect text
+    text = " ".join([s.text for s in segments]).strip()
+    if text:
+        print(text)
+    else:
+        print("ERROR: No speech detected", file=sys.stderr)
+        sys.exit(1)
+        
+except Exception as e:
+    print(f"ERROR: {e}", file=sys.stderr)
+    sys.exit(1)
+EOF
+)
+
+    # Output the transcription
+    if [[ $? -eq 0 ]] && [[ -n "$TRANSCRIPTION" ]]; then
+        echo "$TRANSCRIPTION"
+        return 0
+    else
+        echo "ERROR: Transcription failed" >&2
+        return 1
+    fi
+}
+
+# Debug output to stderr
+echo "Starting recording (max ${DURATION}s)..." >&2
+
+# Start recording in background (macOS specific)
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    if command -v sox &> /dev/null; then
+        # Use sox with native duration limit
+        sox -d -r 16000 -c 1 -b 16 -e signed-integer "$TEMP_FILE" trim 0 "$DURATION" 2>/dev/null &
+        RECORDING_PID=$!
+    else
+        # Use ffmpeg with native duration limit
+        ffmpeg -f avfoundation -i ":0" -t "$DURATION" -ar 16000 -ac 1 -acodec pcm_s16le "$TEMP_FILE" -y 2>/dev/null &
+        RECORDING_PID=$!
+    fi
+else
+    # Linux - use timeout since arecord doesn't have native duration
+    timeout "$DURATION" arecord -f S16_LE -r 16000 -c 1 "$TEMP_FILE" 2>/dev/null &
+    RECORDING_PID=$!
+fi
+
+# Wait for recording to complete or be interrupted
+wait $RECORDING_PID 2>/dev/null
+
+# Transcribe and output
+transcribe_and_output
